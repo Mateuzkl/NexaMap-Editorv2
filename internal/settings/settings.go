@@ -89,14 +89,20 @@ type Settings struct {
 	UITheme          string             `json:"uiTheme"`
 	UIScale          int                `json:"uiScale,omitempty"`
 	SidebarCollapsed bool               `json:"sidebarCollapsed,omitempty"`
+	WriteDebugLog    bool               `json:"writeDebugLog,omitempty"`
+	WorkerThreads    int                `json:"workerThreads,omitempty"`
+	UndoQueueSize    int                `json:"undoQueueSize,omitempty"`
+	UndoMaxMemoryMB  int                `json:"undoMaxMemoryMb,omitempty"`
 	Workspaces       []WorkspaceProfile `json:"workspaces"`
 	ActiveWorkspace  string             `json:"activeWorkspaceId,omitempty"`
 }
 
 const (
-	MinUIScale     = 80
-	MaxUIScale     = 160
-	DefaultUIScale = 100
+	MinUIScale         = 80
+	MaxUIScale         = 160
+	DefaultUIScale     = 100
+	DefaultUndoQueue   = 16384
+	DefaultUndoMaxMB   = 4096
 )
 
 const (
@@ -117,6 +123,9 @@ func Defaults() Settings {
 		MCPPort:         DefaultMCPPort,
 		UITheme:         ThemeModernDark,
 		UIScale:         DefaultUIScale,
+		WorkerThreads:   0,
+		UndoQueueSize:   DefaultUndoQueue,
+		UndoMaxMemoryMB: DefaultUndoMaxMB,
 		Recent:          []Recent{},
 		Workspaces:      []WorkspaceProfile{},
 		MarketShared:    map[string]string{},
@@ -146,6 +155,15 @@ func (s *Settings) normalize() {
 		s.UIScale = DefaultUIScale
 	}
 	s.UIScale = min(max(s.UIScale, MinUIScale), MaxUIScale)
+	s.WorkerThreads = min(max(s.WorkerThreads, 0), 32)
+	if s.UndoQueueSize == 0 {
+		s.UndoQueueSize = DefaultUndoQueue
+	}
+	s.UndoQueueSize = min(max(s.UndoQueueSize, 64), 65536)
+	if s.UndoMaxMemoryMB == 0 {
+		s.UndoMaxMemoryMB = DefaultUndoMaxMB
+	}
+	s.UndoMaxMemoryMB = min(max(s.UndoMaxMemoryMB, 128), 16384)
 	if s.ListColumns == 0 {
 		s.ListColumns = DefaultListColumns
 	}

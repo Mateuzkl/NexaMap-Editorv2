@@ -13,6 +13,8 @@ type SettingsService struct {
 	settings *settings.Store
 	// ApplyMCP starts or stops the MCP server for the settings (nil: none).
 	ApplyMCP func(enabled bool, port int) error
+	// ApplyRuntime applies worker thread count and diagnostic log settings.
+	ApplyRuntime func(prefs settings.Settings)
 }
 
 func NewSettingsService(store *settings.Store, session *Session) *SettingsService {
@@ -30,7 +32,13 @@ func (ss *SettingsService) Update(prefs settings.Settings) error {
 			return err
 		}
 	}
-	return ss.settings.Update(prefs)
+	if err := ss.settings.Update(prefs); err != nil {
+		return err
+	}
+	if ss.ApplyRuntime != nil {
+		ss.ApplyRuntime(ss.settings.Get())
+	}
+	return nil
 }
 
 // MCPCommand is the argument that runs the app as a stdio MCP server.

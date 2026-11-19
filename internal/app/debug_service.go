@@ -3,6 +3,8 @@ package app
 import (
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -37,6 +39,8 @@ type DebugService struct {
 	mu      sync.Mutex
 	nextID  int64
 	entries []DebugLogEntry
+	logFile *os.File
+	logPath string
 	emit    func(name string, data any)
 }
 
@@ -45,6 +49,38 @@ func NewDebugService(emit func(name string, data any)) *DebugService {
 		entries: make([]DebugLogEntry, 0, 128),
 		emit:    emit,
 	}
+}
+
+// SetLogFile enables or disables writing diagnostic logs to nexamap.log.
+func (ds *DebugService) SetLogFile(enabled bool) error {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+	if !enabled {
+		if ds.logFile != nil {
+			_ = ds.logFile.Close()
+			ds.logFile = nil
+		}
+		return nil
+	}
+	if ds.logFile != nil {
+		return nil
+	}
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return err
+	}
+	logDir := filepath.Join(dir, "OTS Creator")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		return err
+	}
+	path := filepath.Join(logDir, "nexamap.log")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	ds.logFile = f
+	ds.logPath = path
+	return nil
 }
 
 // Write implements io.Writer so Go's standard log package streams straight into
@@ -98,10 +134,15 @@ func (ds *DebugService) Log(level, source, message string) DebugLogEntry {
 		ds.entries = ds.entries[:len(ds.entries)-drop]
 	}
 	ds.entries = append(ds.entries, entry)
+	logFile := ds.logFile
 	emit := ds.emit
 	ds.mu.Unlock()
 
-	writeNativeConsole(fmt.Sprintf("[%s] [%s] [%s] %s", entry.Time, strings.ToUpper(entry.Level), entry.Source, entry.Message))
+	formatted := fmt.Sprintf("[%s] [%s] [%s] %s", entry.Time, strings.ToUpper(entry.Level), entry.Source, entry.Message)
+	writeNativeConsole(formatted)
+	if logFile != nil {
+		_, _ = logFile.WriteString(formatted + "\n")
+	}
 	if emit != nil {
 		emit(EventDebugLog, entry)
 	}

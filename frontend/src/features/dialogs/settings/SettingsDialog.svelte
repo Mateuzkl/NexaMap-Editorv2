@@ -20,7 +20,7 @@
 				id: "general",
 				group: "Application",
 				label: "General",
-				words: "startup check for updates reopen last client recent clients clear list",
+				words: "startup check for updates reopen last client recent clients clear list diagnostic log nexamap.log worker threads undo queue memory performance",
 			},
 			{
 				id: "appearance",
@@ -127,6 +127,45 @@
 						onchange={(event) => savePrefs({ reopenLast: event.currentTarget.checked })}
 					/>Reopen the last client on startup</label
 				>
+				<label class="row"
+					><input
+						class="t-check"
+						type="checkbox"
+						checked={settings.writeDebugLog}
+						onchange={(event) => savePrefs({ writeDebugLog: event.currentTarget.checked })}
+					/>Write diagnostic log (nexamap.log)</label
+				>
+
+				<h4>Performance &amp; History</h4>
+				<div class="row">
+					<NumberField
+						label="Worker threads"
+						value={settings.workerThreads ?? 0}
+						min={0}
+						max={32}
+						width={52}
+						onchange={(value) => savePrefs({ workerThreads: value })}
+					/>
+					<span class="t-label">(0 = Auto / all CPU cores)</span>
+				</div>
+				<div class="row">
+					<NumberField
+						label="Undo queue size"
+						value={settings.undoQueueSize || 16384}
+						min={64}
+						max={65536}
+						width={66}
+						onchange={(value) => savePrefs({ undoQueueSize: value })}
+					/>
+					<NumberField
+						label="Undo max memory (MB)"
+						value={settings.undoMaxMemoryMb || 4096}
+						min={128}
+						max={16384}
+						width={66}
+						onchange={(value) => savePrefs({ undoMaxMemoryMb: value })}
+					/>
+				</div>
 
 				<h4>Recent clients</h4>
 				<div class="row">

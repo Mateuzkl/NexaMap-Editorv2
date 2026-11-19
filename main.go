@@ -15,6 +15,7 @@ import (
 	"github.com/nekiro/ots-creator/internal/app"
 	"github.com/nekiro/ots-creator/internal/mcpserver"
 	"github.com/nekiro/ots-creator/internal/settings"
+	"github.com/nekiro/ots-creator/internal/workpool"
 )
 
 // version is set at build time (-ldflags "-X main.version=x.y.z").
@@ -80,9 +81,19 @@ func main() {
 	things := app.NewThingService(session)
 	agents := mcpserver.New(maps, projects, things, emit, version)
 	settingsService.ApplyMCP = agents.Apply
-	if current := prefs.Get(); current.MCPServer {
-		if err := agents.Apply(true, current.MCPPort); err != nil {
-			log.Print(err)
+	applyRuntime := func(cfg settings.Settings) {
+		workpool.SetWorkers(cfg.WorkerThreads)
+		if err := debugService.SetLogFile(cfg.WriteDebugLog); err != nil {
+			log.Printf("diagnostic log: %v", err)
+		}
+	}
+	settingsService.ApplyRuntime = applyRuntime
+	if current := prefs.Get(); true {
+		applyRuntime(current)
+		if current.MCPServer {
+			if err := agents.Apply(true, current.MCPPort); err != nil {
+				log.Print(err)
+			}
 		}
 	}
 

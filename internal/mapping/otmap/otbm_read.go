@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"runtime/debug"
 	"slices"
 	"strings"
 
@@ -46,6 +47,11 @@ func ReadOTBM(data []byte, items Items, format Format) (*Map, []string, error) {
 }
 
 func readOTBM(data []byte, items Items, format Format, customSizes map[byte]int, progress Progress) (*Map, []string, error) {
+	// Temporarily relax GOGC while streaming millions of short-lived OTBM nodes
+	// so large maps (100-300+ MB) load significantly faster with fewer GC pauses.
+	prevGC := debug.SetGCPercent(200)
+	defer debug.SetGCPercent(prevGC)
+
 	if len(data) >= 4 {
 		if identifier := string(data[:4]); !slices.Contains(otbmIdentifiers, identifier) {
 			return nil, nil, fmt.Errorf("%w: identifier %q", ErrNotOTBM, identifier)
@@ -162,6 +168,8 @@ func (r *reader) area(node *otbnode.Node) {
 		r.warn("tile area without a valid base position")
 		return
 	}
+	var scratch Tile
+	itemsBuf := make([]Item, 0, 16)
 	for _, tileNode := range node.Children {
 		if tileNode.Type != nodeTile && tileNode.Type != nodeHouseTile {
 			r.warn("unknown tile node type %d", tileNode.Type)
@@ -169,9 +177,9 @@ func (r *reader) area(node *otbnode.Node) {
 		}
 		tileProps := otbnode.NewReader(tileNode.Props)
 		pos := Position{baseX + uint16(tileProps.U8()), baseY + uint16(tileProps.U8()), floor}
-		tile := &Tile{}
+		scratch = Tile{Items: itemsBuf[:0]}
 		if tileNode.Type == nodeHouseTile {
-			tile.HouseID = tileProps.U32()
+			scratch.HouseID = tileProps.U32()
 		}
 		if tileProps.Err() != nil {
 			r.warn("tile without position in area %d,%d,%d", baseX, baseY, floor)
@@ -181,23 +189,33 @@ func (r *reader) area(node *otbnode.Node) {
 			r.warn("duplicate tile at %d,%d,%d discarded", pos.X, pos.Y, pos.Z)
 			continue
 		}
-		r.tile(tile, tileNode, tileProps, pos)
-		if tile.HouseID != 0 {
-			if _, ok := r.gameMap.Houses[tile.HouseID]; !ok {
-				r.gameMap.Houses[tile.HouseID] = &House{ID: tile.HouseID, Name: fmt.Sprintf("House #%d", tile.HouseID)}
+		r.tile(&scratch, tileNode, tileProps, pos)
+		if scratch.HouseID != 0 {
+			if _, ok := r.gameMap.Houses[scratch.HouseID]; !ok {
+				r.gameMap.Houses[scratch.HouseID] = &House{ID: scratch.HouseID, Name: fmt.Sprintf("House #%d", scratch.HouseID)}
 			}
 		}
-		if len(tile.Items) == 0 {
-			tile.Items = nil
+		if len(scratch.Items) == 0 {
+			scratch.Items = nil
 		}
 		// Keep empty house/flag tiles: SetTile drops truly empty ones.
-		r.gameMap.SetTile(pos, tile)
+		// Packable tiles (95%+ of a map) copy values into chunk slices, so we
+		// avoid allocating a heap *Tile and item slice for every plain tile.
+		if packable(&scratch) {
+			r.gameMap.SetTile(pos, &scratch)
+		} else {
+			owned := scratch
+			if len(scratch.Items) > 0 {
+				owned.Items = slices.Clone(scratch.Items)
+			}
+			r.gameMap.SetTile(pos, &owned)
+		}
 	}
 }
 
 func (r *reader) tile(tile *Tile, node *otbnode.Node, props *otbnode.Reader, pos Position) {
-	// Sized up front: grown by append, item slices keep up to twice the room.
-	if children := len(node.Children); children > 0 {
+	// Reuse scratch buffer capacity when already big enough; grow only when needed.
+	if children := len(node.Children); children > cap(tile.Items) {
 		tile.Items = make([]Item, 0, children)
 	}
 attrs:
