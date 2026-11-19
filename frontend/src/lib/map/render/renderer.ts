@@ -63,6 +63,7 @@ interface ChunkPlan {
 
 export class MapRenderer {
 	readonly gl: WebGL2RenderingContext;
+	private corners: WebGLBuffer;
 	private batch: QuadBatch;
 	private chunks: ChunkBuffers;
 	private things: ThingDrawer;
@@ -79,13 +80,13 @@ export class MapRenderer {
 		});
 		if (!gl) throw new Error("WebGL 2 is not available");
 		this.gl = gl;
-		const corners = gl.createBuffer()!;
-		gl.bindBuffer(gl.ARRAY_BUFFER, corners);
+		this.corners = gl.createBuffer()!;
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.corners);
 		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
-		this.batch = new QuadBatch(gl, corners);
-		this.chunks = new ChunkBuffers(gl, corners, this.missing);
+		this.batch = new QuadBatch(gl, this.corners);
+		this.chunks = new ChunkBuffers(gl, this.corners, this.missing);
 		this.things = new ThingDrawer(this.batch, this.missing);
-		this.lights = new LightPass(gl, corners);
+		this.lights = new LightPass(gl, this.corners);
 		// Chunk quads of later tiles have greater depth (see chunk.vert).
 		gl.clearDepth(0);
 		gl.depthFunc(gl.GEQUAL);
@@ -97,9 +98,11 @@ export class MapRenderer {
 	}
 
 	dispose(): void {
+		this.batch.dispose();
 		this.chunks.dispose();
 		this.lights.dispose();
 		this.atlas?.dispose();
+		this.gl.deleteBuffer(this.corners);
 		this.gl.getExtension("WEBGL_lose_context")?.loseContext();
 	}
 

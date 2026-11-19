@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { frameGroupAt } from "../../lib/thing";
-	import { onMount, tick } from "svelte";
+	import { onDestroy, onMount, tick } from "svelte";
 	import { SvelteMap } from "svelte/reactivity";
 	import {
 		OBJECT_EXT,
@@ -189,6 +189,7 @@
 	// not flash it.
 	let loading = $state(false);
 	let loaderTimer: ReturnType<typeof setTimeout> | undefined;
+	onDestroy(() => clearTimeout(loaderTimer));
 
 	async function show(path: string) {
 		current = path;

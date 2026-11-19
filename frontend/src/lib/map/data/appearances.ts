@@ -77,6 +77,7 @@ class Cache {
 	private map = new Map<number, Look | null>();
 	private queued = new Set<number>();
 	private timer = 0;
+	private generation = 0;
 	constructor(
 		private category: Category,
 		private onload: () => void,
@@ -93,11 +94,14 @@ class Cache {
 
 	private async flush(): Promise<void> {
 		this.timer = 0;
+		const generation = this.generation;
 		const ids = [...this.queued];
 		for (let i = 0; i < ids.length; i += 400) {
+			if (generation !== this.generation) return;
 			const batch = ids.slice(i, i + 400);
 			try {
 				const list = (await MapService.Appearances(this.category, batch)) ?? [];
+				if (generation !== this.generation) return;
 				const found = new Set<number>();
 				for (const appearance of list) {
 					this.map.set(appearance.id, prepare(appearance));
@@ -111,11 +115,21 @@ class Cache {
 				for (const id of batch) this.queued.delete(id);
 			}
 		}
-		this.onload();
+		if (generation === this.generation) this.onload();
 	}
 
 	clear(): void {
 		this.map.clear();
+	}
+
+	dispose(): void {
+		if (this.timer) {
+			clearTimeout(this.timer);
+			this.timer = 0;
+		}
+		this.generation++;
+		this.map.clear();
+		this.queued.clear();
 	}
 }
 
@@ -132,5 +146,9 @@ export class Appearances {
 		this.items.clear();
 		this.outfits.clear();
 		this.rev++;
+	}
+	dispose(): void {
+		this.items.dispose();
+		this.outfits.dispose();
 	}
 }

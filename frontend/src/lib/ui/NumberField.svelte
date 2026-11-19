@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from "svelte";
 	import { clamp } from "../util/math";
 	let {
 		label,
@@ -49,6 +50,7 @@
 	function release() {
 		clearTimeout(timer);
 	}
+	onDestroy(release);
 
 	function onwheel(event: WheelEvent) {
 		if (disabled || document.activeElement !== event.currentTarget) return;

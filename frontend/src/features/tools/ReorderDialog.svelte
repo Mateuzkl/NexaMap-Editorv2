@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from "svelte";
 	import { CATEGORIES, CATEGORY_LABELS, CATEGORY_NAMES, Category, minId, res, ThingService } from "../../lib/api";
 	import { app, run, toast, versions } from "../../lib/state/app.svelte";
 	import Dialog from "../../lib/ui/Dialog.svelte";
@@ -12,6 +13,8 @@
 	let category = $state<Category>(app.category);
 	let insert = $state(false);
 	let updateRefs = $state(true);
+	let recentTimer: ReturnType<typeof setTimeout> | undefined;
+	onDestroy(() => clearTimeout(recentTimer));
 
 	const first = $derived(minId(category));
 	const end = $derived(app.maxId(category) + 1);
@@ -120,7 +123,8 @@
 		selected = moved;
 		anchor = moved[0] ?? null;
 		recent = new Set(moved);
-		setTimeout(() => (recent = new Set()), 1500);
+		clearTimeout(recentTimer);
+		recentTimer = setTimeout(() => (recent = new Set()), 1500);
 		const low = Math.min(...moved);
 		const high = Math.max(...moved);
 		toast(

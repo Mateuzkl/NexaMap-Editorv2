@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from "svelte";
 	import { hasImprovedAnimations } from "../../lib/thing";
 	import {
 		CATEGORIES,
@@ -78,6 +79,7 @@
 		hoverA.leave();
 		hoverB.leave();
 	}
+	onDestroy(leave);
 	// Objects copied with their ids are equal afterwards and drop out of the
 	// diff. They stay listed as copied (until the category changes), so the
 	// list does not shift under the cursor.

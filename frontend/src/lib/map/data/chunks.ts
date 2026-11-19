@@ -340,4 +340,16 @@ export class ChunkStore {
 	trim(keep: (key: number) => boolean, max = 3000): void {
 		trimStore(this.chunks, keep, max);
 	}
+
+	dispose(): void {
+		if (this.timer) {
+			cancelAnimationFrame(this.timer);
+			this.timer = 0;
+		}
+		this.generation++;
+		this.chunks.clear();
+		this.inflight.clear();
+		this.latest.clear();
+		this.queued.clear();
+	}
 }

@@ -123,10 +123,22 @@
 	});
 
 	onMount(() => {
+		let unmounted = false;
+		let offState: (() => void) | null = null;
+		let offUpdates: (() => void) | null = null;
 		void (async () => {
 			await loadPrefs();
-			await initState();
-			void initUpdates(prefs.settings.checkUpdates);
+			if (unmounted) return;
+			offState = await initState();
+			if (unmounted) {
+				offState();
+				return;
+			}
+			offUpdates = await initUpdates(prefs.settings.checkUpdates);
+			if (unmounted) {
+				offUpdates();
+				return;
+			}
 			const last = prefs.settings.recent?.[0];
 			if (prefs.settings.reopenLast && last && !app.open) await commands.openRecent(last);
 		})();
@@ -140,6 +152,9 @@
 		const offCollab = followCollab();
 		const offDebug = initDebugConsole();
 		return () => {
+			unmounted = true;
+			offState?.();
+			offUpdates?.();
 			offClose();
 			offDrop();
 			offAgents();

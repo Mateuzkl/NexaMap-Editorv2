@@ -4,6 +4,7 @@
 	// bottom-right corner on the tile's, like the client draws bigger objects.
 	// One canvas has no seams between tiles; it is shown at most `max` px a
 	// tile, smaller when the panel is narrower.
+	import { onDestroy } from "svelte";
 	import { Category, res } from "../../lib/api";
 	import type { BrushPreview } from "../../lib/map/data/api";
 	import { map } from "../../lib/map/state.svelte";
@@ -49,6 +50,12 @@
 	}
 	const box = $derived(drag && boxOf(drag));
 
+	let cleanupDrag: (() => void) | null = null;
+	onDestroy(() => {
+		cleanupDrag?.();
+		images.clear();
+	});
+
 	function down(event: MouseEvent) {
 		if (event.button !== 0) return;
 		const start = tileAt(event);
@@ -80,6 +87,13 @@
 			for (let y = rect.y0; y <= rect.y1; y++) for (let x = rect.x0; x <= rect.x1; x++) tiles.push({ x, y });
 			onselect?.(tiles, area.add);
 		};
+		cleanupDrag?.();
+		const detach = () => {
+			window.removeEventListener("mousemove", move);
+			window.removeEventListener("mouseup", up);
+			if (cleanupDrag === detach) cleanupDrag = null;
+		};
+		cleanupDrag = detach;
 		window.addEventListener("mousemove", move);
 		window.addEventListener("mouseup", up);
 	}
@@ -115,13 +129,13 @@
 			.filter((tile) => !!tile)
 			.sort((first, second) => first!.y - second!.y || first!.x - second!.x);
 		// Client stacking within first tile: ground, borders, bottom, common, top.
-		const rank = (id: number) => (items.is(id, "ground") ? 0 : ([3, 1, 2, 4][items.top[id]] ?? 3));
+		const rank = (id: number) => (items.is(id, "ground") ? 0 : ([3, 1, 2, 4][items.topOf(id)] ?? 3));
 		const draws = order.flatMap((tile) =>
 			[...(tile!.items ?? [])]
 				.map((id, stackIndex) => ({ id, stackIndex }))
 				.sort((first, second) => rank(first.id) - rank(second.id) || first.stackIndex - second.stackIndex)
 				.map(({ id }) => {
-					const clientId = items.client[id] ?? 0;
+					const clientId = items.clientOf(id);
 					// Uncropped, in the pattern of its tile: thumbnails are cropped to
 					// their pixels and would not line up.
 					return {

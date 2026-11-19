@@ -353,6 +353,9 @@
 			offSprites();
 			cancelAnimationFrame(raf);
 			clearTimeout(timer);
+			chunks.dispose();
+			geo.dispose();
+			looks.dispose();
 			renderer?.dispose();
 			renderer = null;
 		};

@@ -16,22 +16,36 @@ export const updates = $state<{
 	progress: { written: number; total: number } | null;
 }>({ version: "", info: null, checking: false, stage: "idle", progress: null });
 
-export async function initUpdates(autoCheck: boolean): Promise<void> {
+let stopUpdateEvents: (() => void) | null = null;
+
+export async function initUpdates(autoCheck: boolean): Promise<() => void> {
+	stopUpdateEvents?.();
 	try {
 		updates.version = await UpdateService.Version();
 	} catch {
-		return; // not running inside Wails
+		return () => {}; // not running inside Wails
 	}
-	Events.On(Updater.Events.DownloadStarted, () => (updates.stage = "downloading"));
-	Events.On(
-		Updater.Events.DownloadProgress,
-		(event: { data: { written: number; total: number } }) => (updates.progress = event.data),
-	);
-	Events.On(Updater.Events.Verifying, () => (updates.stage = "verifying"));
-	Events.On(Updater.Events.Installing, () => (updates.stage = "installing"));
-	Events.On(Updater.Events.UpdateReady, () => (updates.stage = "restarting"));
-	if (updates.version === "dev" || !autoCheck) return;
-	setTimeout(() => void checkForUpdates(false), 3000);
+	const offs = [
+		Events.On(Updater.Events.DownloadStarted, () => (updates.stage = "downloading")),
+		Events.On(
+			Updater.Events.DownloadProgress,
+			(event: { data: { written: number; total: number } }) => (updates.progress = event.data),
+		),
+		Events.On(Updater.Events.Verifying, () => (updates.stage = "verifying")),
+		Events.On(Updater.Events.Installing, () => (updates.stage = "installing")),
+		Events.On(Updater.Events.UpdateReady, () => (updates.stage = "restarting")),
+	];
+	let checkTimer: ReturnType<typeof setTimeout> | undefined;
+	if (updates.version !== "dev" && autoCheck) {
+		checkTimer = setTimeout(() => void checkForUpdates(false), 3000);
+	}
+	const stop = () => {
+		clearTimeout(checkTimer);
+		for (const off of offs) off();
+		if (stopUpdateEvents === stop) stopUpdateEvents = null;
+	};
+	stopUpdateEvents = stop;
+	return stop;
 }
 
 export async function checkForUpdates(manual: boolean): Promise<void> {

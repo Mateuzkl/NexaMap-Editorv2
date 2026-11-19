@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from "svelte";
 	import { hasImprovedAnimations } from "../lib/thing";
 	import { keyStep } from "../lib/ui/listNav";
 	import { anchoredRange, idRange } from "../lib/util/selection";
@@ -117,6 +118,7 @@
 		const raw = await ThingService.Get(cat, id);
 		return raw && cat === app.category ? normalizeThing(raw) : null;
 	});
+	onDestroy(() => hover.leave());
 
 	function click(event: MouseEvent, id: number) {
 		if (event.shiftKey && app.focused !== null) {

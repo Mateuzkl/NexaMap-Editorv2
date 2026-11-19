@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Snippet } from "svelte";
+	import { onDestroy, type Snippet } from "svelte";
 	import { PanView } from "../pan.svelte";
 
 	let {
@@ -27,6 +27,7 @@
 
 	let animate = $state(false);
 	let glideTimer: ReturnType<typeof setTimeout> | undefined;
+	onDestroy(() => clearTimeout(glideTimer));
 	function glide() {
 		animate = true;
 		clearTimeout(glideTimer);

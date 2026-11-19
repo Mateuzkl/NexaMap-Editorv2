@@ -239,10 +239,13 @@ function applyOther(state: State): void {
 	otherVersions.apply(state.rev, state.delta);
 }
 
-export async function initState(): Promise<void> {
-	Events.On("project:changed", (event) => applyState(event.data));
-	Events.On("compare:changed", (event) => applyOther(event.data));
-	Events.On("app:progress", (event) => {
+let stopStateEvents: (() => void) | null = null;
+
+export async function initState(): Promise<() => void> {
+	stopStateEvents?.();
+	const offProject = Events.On("project:changed", (event) => applyState(event.data));
+	const offCompare = Events.On("compare:changed", (event) => applyOther(event.data));
+	const offProgress = Events.On("app:progress", (event) => {
 		const progress = event.data;
 		if ((app.busy || app.stoppable) && progress.done < progress.total) {
 			app.busy = progress.percent
@@ -251,9 +254,17 @@ export async function initState(): Promise<void> {
 			app.progress = { done: progress.done, total: progress.total };
 		}
 	});
+	const stop = () => {
+		offProject();
+		offCompare();
+		offProgress();
+		if (stopStateEvents === stop) stopStateEvents = null;
+	};
+	stopStateEvents = stop;
 	applyState(await ProjectService.State());
 	for (const warning of (await ProjectService.StartupWarnings()) ?? []) toast(warning, "error", STARTUP_WARNING_MS);
 	applyOther(await CompareService.State());
+	return stop;
 }
 
 async function reloadDraft(): Promise<void> {

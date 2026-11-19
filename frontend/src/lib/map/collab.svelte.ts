@@ -73,7 +73,7 @@ function setStatus(status: CollabStatus): void {
 /** Follows the session; returns the function that stops. */
 export function followCollab(): () => void {
 	void CollabService.Status().then(setStatus);
-	return Events.On("collab:event", (event: { data: CollabEvent }) => {
+	const off = Events.On("collab:event", (event: { data: CollabEvent }) => {
 		const data = event.data;
 		if (!data) return;
 		switch (data.kind) {
@@ -94,6 +94,12 @@ export function followCollab(): () => void {
 				break;
 		}
 	});
+	return () => {
+		clearTimeout(presenceTimer);
+		presenceTimer = 0;
+		presenceDue = null;
+		off();
+	};
 }
 
 let presenceTimer = 0;

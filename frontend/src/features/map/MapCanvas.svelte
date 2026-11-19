@@ -787,6 +787,12 @@
 			offSprites();
 			cancelAnimationFrame(raf);
 			clearTimeout(animTimer);
+			clearTimeout(variantHintTimer);
+			for (const chunkStore of stores.values()) chunkStore.dispose();
+			stores.clear();
+			for (const geoStore of geos.values()) geoStore.dispose();
+			geos.clear();
+			looks.dispose();
 			renderer?.dispose();
 			renderer = null;
 		};
@@ -835,7 +841,13 @@
 		const ids = new Set(map.maps.map((open) => open.id));
 		for (const id of [...stores.keys()]) {
 			if (!ids.has(id)) {
+				stores.get(id)?.dispose();
 				stores.delete(id);
+			}
+		}
+		for (const id of [...geos.keys()]) {
+			if (!ids.has(id)) {
+				geos.get(id)?.dispose();
 				geos.delete(id);
 			}
 		}

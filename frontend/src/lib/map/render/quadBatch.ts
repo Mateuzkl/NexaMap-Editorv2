@@ -122,4 +122,11 @@ export class QuadBatch {
 		gl.uniform1f(this.uniforms.u_perRow, atlas.perRow);
 		gl.uniform1f(this.uniforms.u_uvCell, atlas.uvCell);
 	}
+
+	dispose(): void {
+		this.gl.deleteBuffer(this.instances);
+		this.gl.deleteVertexArray(this.vao);
+		this.gl.deleteProgram(this.program);
+		this.atlas = null;
+	}
 }

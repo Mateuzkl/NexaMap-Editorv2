@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -114,10 +115,14 @@ func (s *Session) client(slot *clientSlot) (*project.Project, error) {
 
 func (s *Session) setClient(slot *clientSlot, proj *project.Project) {
 	s.mu.Lock()
+	hadPrevious := slot.project != nil
 	slot.project = proj
 	s.mu.Unlock()
 	if proj != nil {
 		proj.TakeDelta() // a new client replaces everything anyway
+	}
+	if hadPrevious {
+		go debug.FreeOSMemory()
 	}
 	s.rev.Add(1)
 	state := s.state(slot)

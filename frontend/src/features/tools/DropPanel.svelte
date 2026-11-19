@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from "svelte";
 	import { CATEGORY_NAMES, errorMessage, minId, res, ThingService, type Category } from "../../lib/api";
 	import { openContextMenu, type MenuEntry } from "../../lib/menu.svelte";
 	import type { DropQueue, QueueItem } from "../../lib/state/queue.svelte";
@@ -57,6 +58,7 @@
 
 	let recent = $state<Set<number>>(new Set());
 	let timer: ReturnType<typeof setTimeout> | undefined;
+	onDestroy(() => clearTimeout(timer));
 	async function dropAt(at: number, amount = 1, free = false) {
 		const dropped = await dropQueue.drop(category, at, amount, free);
 		if (!dropped.length) return;

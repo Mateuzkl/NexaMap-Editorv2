@@ -150,6 +150,7 @@ export class GeoStore {
 	/** Request number of the newest request of each chunk: older answers are dropped. */
 	private latest = new Map<number, number>();
 	private requestNumber = 0;
+	private generation = 0;
 	private timer = 0;
 	private times: { at: number; total: number; build: number }[] = [];
 	private burst: {
@@ -209,6 +210,7 @@ export class GeoStore {
 
 	private async fetch(keys: number[], signature: string): Promise<void> {
 		const requestNumber = ++this.requestNumber;
+		const generation = this.generation;
 		for (const key of keys) this.latest.set(key, requestNumber);
 		const { bits, house, blockSize } = decodeGeoSignature(signature);
 		const base = blockSize > 1 ? GEO_BLOCK : 0;
@@ -229,6 +231,7 @@ export class GeoStore {
 			const buffer = await new Response(
 				response.body!.pipeThrough(new DecompressionStream("deflate-raw")),
 			).arrayBuffer();
+			if (generation !== this.generation) return;
 			const chunks = decodeGeo(buffer, signature);
 			const now = performance.now();
 			const build = Number(response.headers.get("X-Build-Ms")) || 0;
@@ -254,13 +257,15 @@ export class GeoStore {
 		} catch {
 			// The map was closed or the request failed: try again on demand.
 		} finally {
-			for (const key of keys) {
-				if (this.latest.get(key) === requestNumber) {
-					this.latest.delete(key);
-					if (this.inflight.get(key) === signature) this.inflight.delete(key);
+			if (generation === this.generation) {
+				for (const key of keys) {
+					if (this.latest.get(key) === requestNumber) {
+						this.latest.delete(key);
+						if (this.inflight.get(key) === signature) this.inflight.delete(key);
+					}
 				}
+				this.logBurst();
 			}
-			this.logBurst();
 		}
 	}
 
@@ -327,5 +332,19 @@ export class GeoStore {
 
 	trim(keep: (key: number) => boolean, max = 12000): void {
 		trimStore(this.chunks, keep, max);
+	}
+
+	dispose(): void {
+		if (this.timer) {
+			cancelAnimationFrame(this.timer);
+			this.timer = 0;
+		}
+		this.generation++;
+		this.chunks.clear();
+		this.inflight.clear();
+		this.latest.clear();
+		this.queued.clear();
+		this.times = [];
+		this.burst = null;
 	}
 }
