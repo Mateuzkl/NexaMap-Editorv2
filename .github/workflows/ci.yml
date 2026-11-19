@@ -1,0 +1,123 @@
+name: CI Build (Windows & Linux)
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  WAILS_VERSION: v3.0.0
+
+jobs:
+  windows:
+    name: Build & Test (Windows amd64)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install tools
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@$WAILS_VERSION
+          if ! command -v makensis >/dev/null; then choco install nsis -y --no-progress; fi
+          echo "C:/Program Files (x86)/NSIS" >> "$GITHUB_PATH"
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Test & Vet
+        run: |
+          wails3 task common:generate:bindings
+          mkdir -p frontend/dist && touch frontend/dist/.keep
+          go vet ./...
+          go test ./...
+          cd frontend && npx prettier --check . && npx vitest run && npx svelte-check --threshold error
+
+      - name: Build Windows binary & installer
+        run: wails3 task windows:package VERSION="dev" INSTALLER_VERSION="0.1.0"
+
+      - name: Collect Windows artifacts
+        run: |
+          mkdir -p dist
+          cp "bin/NexaMap Editor.exe" dist/nexamap-editor-windows-amd64.exe
+          cp bin/nexamap-editor-amd64-installer.exe dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-windows-amd64
+          path: dist/*
+          if-no-files-found: error
+
+  linux:
+    name: Build & Test (Linux amd64)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install system packages
+        run: |
+          packages="build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev file desktop-file-utils"
+          install_packages() {
+            sudo apt-get update &&
+            sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 $packages
+          }
+          if ! install_packages; then
+            echo "http://archive.ubuntu.com/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
+            install_packages
+          fi
+
+      - name: Install tools
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@$WAILS_VERSION
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Test & Vet
+        run: |
+          wails3 task common:generate:bindings
+          mkdir -p frontend/dist && touch frontend/dist/.keep
+          go vet ./...
+          go test ./...
+
+      - name: Build Linux packages
+        run: wails3 task linux:package ARCH="amd64" VERSION="dev"
+
+      - name: Collect Linux artifacts
+        run: |
+          mkdir -p dist
+          ls -l bin
+          cp bin/nexamap-editor dist/nexamap-editor-linux-amd64
+          cp bin/nexamap-editor-x86_64.AppImage dist/nexamap-editor-linux-amd64.AppImage
+          chmod +x dist/nexamap-editor-linux-amd64 dist/*.AppImage
+          cp bin/nexamap-editor.deb dist/nexamap-editor_0.1.0_amd64.deb
+          cp bin/nexamap-editor.rpm dist/nexamap-editor-0.1.0.x86_64.rpm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-linux-amd64
+          path: dist/*
+          if-no-files-found: error

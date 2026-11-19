@@ -82,8 +82,8 @@ jobs:
       - name: Collect assets
         run: |
           mkdir dist
-          cp bin/otscreator.exe dist/otscreator-windows-amd64.exe
-          cp bin/otscreator-amd64-installer.exe dist/
+          cp "bin/NexaMap Editor.exe" dist/nexamap-editor-windows-amd64.exe
+          cp bin/nexamap-editor-amd64-installer.exe dist/
 
       - uses: actions/upload-artifact@v4
         with:
@@ -225,10 +225,10 @@ jobs:
             amd64) appimage_arch=x86_64; rpm_arch=x86_64 ;;
             arm64) appimage_arch=aarch64; rpm_arch=aarch64 ;;
           esac
-          cp "bin/otscreator-$appimage_arch.AppImage" "dist/otscreator-linux-${{ matrix.arch }}.AppImage"
+          cp "bin/nexamap-editor-$appimage_arch.AppImage" "dist/nexamap-editor-linux-${{ matrix.arch }}.AppImage"
           chmod +x dist/*.AppImage
-          cp bin/otscreator.deb "dist/otscreator_${NUMERIC_VERSION}_${{ matrix.arch }}.deb"
-          cp bin/otscreator.rpm "dist/otscreator-${NUMERIC_VERSION}.$rpm_arch.rpm"
+          cp bin/nexamap-editor.deb "dist/nexamap-editor_${NUMERIC_VERSION}_${{ matrix.arch }}.deb"
+          cp bin/nexamap-editor.rpm "dist/nexamap-editor-${NUMERIC_VERSION}.$rpm_arch.rpm"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -274,4 +274,4 @@ jobs:
           prerelease=""
           if [ "$version" != "${version%%[-+]*}" ]; then prerelease="--prerelease"; fi
           gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
-            --title "OTS Creator $version" --notes-file notes.md $prerelease
+            --title "NexaMap Editor $version" --notes-file notes.md $prerelease

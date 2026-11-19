@@ -5,7 +5,7 @@
 !include "FileFunc.nsh"
 
 !ifndef INFO_PROJECTNAME
-    !define INFO_PROJECTNAME "otscreator"
+    !define INFO_PROJECTNAME "nexamap-editor"
 !endif
 !ifndef INFO_COMPANYNAME
     !define INFO_COMPANYNAME "nekiro"
@@ -20,7 +20,7 @@
     !define INFO_COPYRIGHT "(c) 2026 Marcin Jałocha (nekiro)"
 !endif
 !ifndef PRODUCT_EXECUTABLE
-    !define PRODUCT_EXECUTABLE "${INFO_PROJECTNAME}.exe"
+    !define PRODUCT_EXECUTABLE "NexaMap Editor.exe"
 !endif
 !ifndef UNINST_KEY_NAME
     !define UNINST_KEY_NAME "${INFO_COMPANYNAME}${INFO_PRODUCTNAME}"
