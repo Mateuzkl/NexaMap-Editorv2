@@ -6,10 +6,10 @@
 		"0000": {
 			"ProductVersion": "0.1.0",
 			"CompanyName": "nekiro",
-			"FileDescription": "Object editor for Open Tibia clients",
+			"FileDescription": "NexaMap Editor - Map and object editor for Open Tibia clients",
 			"LegalCopyright": "(c) 2026 Marcin Jałocha (nekiro)",
 			"ProductName": "NexaMap Editor",
-			"Comments": "https://github.com/nekiro/ots-creator"
+			"Comments": "https://github.com/Mateuzkl/NexaMap-Editorv2 (based on OTS Creator by nekiro)"
 		}
 	}
 }

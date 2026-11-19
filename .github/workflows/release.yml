@@ -1,17 +1,17 @@
 # Builds Windows, macOS and Linux releases when a version tag (v1.2.3) is pushed.
 #
 # Release assets:
-#   otscreator-amd64-installer.exe  NSIS installer for first installs
-#   otscreator-windows-amd64.exe    plain executable, used by the in-app updater
-#   otscreator-darwin-arm64.zip     .app bundle for Apple Silicon Macs
-#   otscreator-darwin-amd64.zip     .app bundle for Intel Macs
-#   otscreator-linux-amd64.AppImage portable Linux app, used by the in-app updater
-#   otscreator-linux-arm64.AppImage
-#   otscreator_<version>_amd64.deb  packages for Debian/Ubuntu and Fedora/RHEL
-#   otscreator_<version>_arm64.deb  (no "linux" in the name, so the updater
-#   otscreator-<version>.x86_64.rpm  skips them)
-#   otscreator-<version>.aarch64.rpm
-#   checksums.txt                   SHA-256 of all of them, checked by the updater
+#   nexamap-editor-amd64-installer.exe  NSIS installer for first installs
+#   nexamap-editor-windows-amd64.exe    plain executable, used by the in-app updater
+#   nexamap-editor-darwin-arm64.zip     .app bundle for Apple Silicon Macs
+#   nexamap-editor-darwin-amd64.zip     .app bundle for Intel Macs
+#   nexamap-editor-linux-amd64.AppImage portable Linux app, used by the in-app updater
+#   nexamap-editor-linux-arm64.AppImage
+#   nexamap-editor_<version>_amd64.deb  packages for Debian/Ubuntu and Fedora/RHEL
+#   nexamap-editor_<version>_arm64.deb  (no "linux" in the name, so the updater
+#   nexamap-editor-<version>.x86_64.rpm skips them)
+#   nexamap-editor-<version>.aarch64.rpm
+#   checksums.txt                       SHA-256 of all of them, checked by the updater
 #
 # The in-app updater (Wails updater, GitHub provider) picks the asset whose name
 # contains the running OS and architecture and skips "-installer." assets. On
@@ -24,7 +24,7 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   WAILS_VERSION: v3.0.0
@@ -37,6 +37,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-go@v5
         with:
@@ -97,6 +99,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-go@v5
         with:
@@ -136,12 +140,12 @@ jobs:
         run: |
           mkdir dist
           for arch in arm64 amd64; do
-            # Builds bin/otscreator.app (ad-hoc signed by create:app:bundle).
+            # Builds "bin/NexaMap Editor.app" (ad-hoc signed by create:app:bundle).
             wails3 task darwin:package ARCH="$arch" VERSION="$VERSION"
-            lipo -info bin/otscreator.app/Contents/MacOS/otscreator
-            codesign --verify --deep --strict bin/otscreator.app
+            lipo -info "bin/NexaMap Editor.app/Contents/MacOS/NexaMap Editor"
+            codesign --verify --deep --strict "bin/NexaMap Editor.app"
             # One top-level .app per zip, as the updater expects.
-            ditto -c -k --norsrc --keepParent bin/otscreator.app "dist/otscreator-darwin-$arch.zip"
+            ditto -c -k --norsrc --keepParent "bin/NexaMap Editor.app" "dist/nexamap-editor-darwin-$arch.zip"
           done
 
       - uses: actions/upload-artifact@v4
@@ -163,6 +167,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-go@v5
         with:
@@ -190,15 +196,10 @@ jobs:
           # GTK 4 and WebKitGTK 6.0 for cgo; file and desktop-file-utils for linuxdeploy.
           packages="build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev file desktop-file-utils"
           install_packages() {
-            sudo apt-get update &&
-            sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 $packages
+            sudo apt-get update --fix-missing &&
+            sudo apt-get install -y --no-install-recommends -o Acquire::Retries=5 $packages
           }
-          # The runner's Azure apt mirror sometimes lags behind its index or goes down;
-          # retry once against the main Ubuntu archive.
-          if ! install_packages; then
-            echo "http://archive.ubuntu.com/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt
-            install_packages
-          fi
+          install_packages || (sleep 5 && install_packages)
 
       - name: Install tools
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@$WAILS_VERSION
@@ -239,11 +240,14 @@ jobs:
   release:
     needs: [windows, macos, linux]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       # Full history and tags, for the commit list in the release notes.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/download-artifact@v4
         with:

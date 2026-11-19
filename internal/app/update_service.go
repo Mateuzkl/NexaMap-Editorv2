@@ -8,7 +8,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/updater"
 )
 
-const UpdateRepository = "nekiro/ots-creator"
+const UpdateRepository = "Mateuzkl/NexaMap-Editorv2"
 
 // UpdateChecksums names the release asset with SHA-256 sums of the other
 // assets (sha256sum format). The release workflow uploads it.
