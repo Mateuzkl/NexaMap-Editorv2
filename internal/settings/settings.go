@@ -227,14 +227,8 @@ func Open(path string) (*Store, error) {
 		return store, err
 	}
 	loaded := Defaults()
-	// Existing settings.json files created before uiTheme was added stay on
-	// Classic so existing users keep their original look until they switch.
-	loaded.UITheme = ""
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		return store, fsutil.SetAside(path, err)
-	}
-	if loaded.UITheme == "" {
-		loaded.UITheme = ThemeClassic
 	}
 	loaded.normalize()
 	store.settings = loaded
@@ -372,7 +366,10 @@ func (st *Store) SaveWorkspace(profile WorkspaceProfile) ([]WorkspaceProfile, er
 	}
 	next := []WorkspaceProfile{profile}
 	for _, existing := range st.settings.Workspaces {
-		if existing.ID != profile.ID {
+		samePair := profile.ClientRoot != "" &&
+			fsutil.SamePath(existing.ClientRoot, profile.ClientRoot) &&
+			fsutil.SamePath(existing.ServerRoot, profile.ServerRoot)
+		if existing.ID != profile.ID && !samePair {
 			next = append(next, existing)
 		}
 	}

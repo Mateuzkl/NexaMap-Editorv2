@@ -119,8 +119,8 @@ func TestUIThemeDefaultsAndMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := legacy.Get()
-	if got.UITheme != ThemeClassic {
-		t.Fatalf("legacy uiTheme = %q, want %q", got.UITheme, ThemeClassic)
+	if got.UITheme != ThemeModernDark {
+		t.Fatalf("legacy uiTheme = %q, want %q", got.UITheme, ThemeModernDark)
 	}
 	if got.CheckUpdates || got.ListColumns != 9 || len(got.Recent) != 1 || got.MarketShared["m1"] != "tok1" || got.LastDirs["openClient"] != "/old" {
 		t.Fatalf("legacy settings lost fields: %+v", got)

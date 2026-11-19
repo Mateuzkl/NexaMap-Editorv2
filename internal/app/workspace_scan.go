@@ -257,7 +257,12 @@ func scanServerRoot(ctx context.Context, root, overrideOtb, overrideXml string) 
 	// Baseline detection via existing server_data.go logic.
 	baseData := detectServerData(cleaned)
 	res.ServerDir = baseData.ServerDir
-	if res.ServerDir == "" {
+	hasCanaryDatapack := fsutil.DirExists(filepath.Join(cleaned, "data-otservbr-global")) ||
+		fsutil.DirExists(filepath.Join(cleaned, "data-canary"))
+	if hasCanaryDatapack {
+		// Keep root so creature scanner walks both data/ and data-otservbr-global/data-canary.
+		res.ServerDir = cleaned
+	} else if res.ServerDir == "" {
 		if fsutil.DirExists(filepath.Join(cleaned, "data")) {
 			res.ServerDir = filepath.Join(cleaned, "data")
 		} else {

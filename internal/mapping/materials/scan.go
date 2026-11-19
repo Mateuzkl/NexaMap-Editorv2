@@ -23,10 +23,10 @@ const (
 )
 
 var (
-	reMonsterType = regexp.MustCompile(`Game\.createMonsterType\(\s*"([^"]+)"`)
-	reNpcType     = regexp.MustCompile(`Game\.createNpcType\(\s*"([^"]+)"`)
-	reNpcVar      = regexp.MustCompile(`(?:internalNpcName|npcName)\s*=\s*"([^"]+)"`)
-	reNpcConfig   = regexp.MustCompile(`npcConfig\.name\s*=\s*"([^"]+)"`)
+	reMonsterType = regexp.MustCompile(`Game\.createMonsterType\(\s*["']([^"']+)["']`)
+	reNpcType     = regexp.MustCompile(`Game\.createNpcType\(\s*["']([^"']+)["']`)
+	reNpcVar      = regexp.MustCompile(`(?:internalNpcName|npcName)\s*=\s*["']([^"']+)["']`)
+	reNpcConfig   = regexp.MustCompile(`npcConfig\.name\s*=\s*["']([^"']+)["']`)
 	reOutfit      = regexp.MustCompile(`(?s)\.outfit\s*=\s*\{(.*?)\}`)
 	reKeyValue    = regexp.MustCompile(`(\w+)\s*=\s*(\d+)`)
 )
@@ -79,7 +79,13 @@ func ScanCreatures(dir string) ([]*CreatureType, error) {
 			return nil
 		}
 		if ext == ".xml" {
-			if isCreatureRegistry(data) {
+			if isCreatureList(data) {
+				if list, err := ParseRMECreatures(data); err == nil {
+					for _, creature := range list {
+						add(creature)
+					}
+				}
+			} else if isCreatureRegistry(data) {
 				registries = append(registries, path)
 			} else if creature := xmlCreature(data); creature != nil {
 				xmlFiles[strings.ToLower(filepath.Clean(path))] = creature
@@ -101,6 +107,11 @@ func ScanCreatures(dir string) ([]*CreatureType, error) {
 		return strings.Compare(strings.ToLower(left.Name), strings.ToLower(right.Name))
 	})
 	return out, err
+}
+
+func isCreatureList(data []byte) bool {
+	head := strings.ToLower(string(data[:min(len(data), xmlSniffBytes)]))
+	return strings.Contains(head, "<creatures")
 }
 
 func isCreatureRegistry(data []byte) bool {

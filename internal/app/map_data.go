@@ -223,13 +223,23 @@ func (data *mapData) index() {
 func (data *mapData) allCreatures() []*materials.CreatureType {
 	var all []*materials.CreatureType
 	defined := map[string]bool{}
-	for _, creature := range data.materials.Creatures {
-		defined[strings.ToLower(creature.Name)] = true
+	add := func(creature *materials.CreatureType) {
+		key := strings.ToLower(creature.Name)
+		if key == "" || defined[key] {
+			return
+		}
+		defined[key] = true
 		all = append(all, creature)
 	}
+	for _, creature := range data.materials.Creatures {
+		add(creature)
+	}
 	for _, creature := range data.scanned {
-		if !defined[strings.ToLower(creature.Name)] {
-			all = append(all, creature)
+		add(creature)
+	}
+	if len(all) == 0 {
+		for _, creature := range materials.BuiltinCreatures() {
+			add(creature)
 		}
 	}
 	slices.SortFunc(all, func(first, second *materials.CreatureType) int {
@@ -240,6 +250,9 @@ func (data *mapData) allCreatures() []*materials.CreatureType {
 
 func (data *mapData) outfit(creature string) (materials.Outfit, bool) {
 	if found := data.creatures[strings.ToLower(creature)]; found != nil {
+		return found.Outfit, true
+	}
+	if found := materials.BuiltinCreature(creature); found != nil {
 		return found.Outfit, true
 	}
 	return materials.Outfit{}, false
