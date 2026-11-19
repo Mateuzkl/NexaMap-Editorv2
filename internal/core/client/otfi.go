@@ -55,6 +55,8 @@ func ParseOTFI(data []byte) (OTFI, error) {
 		switch key {
 		case "extended":
 			result.Features.Extended = parseBool(value)
+		case "extended-items":
+			result.Features.ExtendedItems = parseBool(value)
 		case "transparency":
 			result.Features.Transparency = parseBool(value)
 		case "frame-durations":
@@ -94,6 +96,9 @@ func (o OTFI) Marshal() []byte {
 	var builder strings.Builder
 	builder.WriteString("DatSpr\n")
 	fmt.Fprintf(&builder, "  extended: %t\n", o.Features.Extended)
+	if o.Features.ExtendedItems {
+		fmt.Fprintf(&builder, "  extended-items: true\n")
+	}
 	fmt.Fprintf(&builder, "  transparency: %t\n", o.Features.Transparency)
 	fmt.Fprintf(&builder, "  frame-durations: %t\n", o.Features.ImprovedAnimations)
 	fmt.Fprintf(&builder, "  frame-groups: %t\n", o.Features.FrameGroups)

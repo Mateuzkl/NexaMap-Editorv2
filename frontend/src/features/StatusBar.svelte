@@ -15,6 +15,7 @@
 		if (!features) return "";
 		return [
 			features.extended && "extended",
+			features.extendedItems && "extended items",
 			features.transparency && "transparency",
 			features.improvedAnimations && "animations",
 			features.frameGroups && "frame groups",

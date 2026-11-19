@@ -52,16 +52,20 @@ func (f *File) MaxID(category thing.Category) uint32 {
 func Decode(data []byte, opts Options) (*File, error) {
 	r := binio.NewReader(data)
 	file := NewFile(r.U32())
-	var counts [4]uint16
+	var counts [4]uint32
 	for i := range counts {
-		counts[i] = r.U16()
+		if i == 0 && opts.Features.ExtendedItems {
+			counts[i] = r.U32()
+		} else {
+			counts[i] = uint32(r.U16())
+		}
 	}
 	if r.Err() != nil {
 		return nil, fmt.Errorf("dat header: %w", r.Err())
 	}
 	table := Table(opts.Format)
 	for i, category := range thing.Categories {
-		maxID := uint32(counts[i])
+		maxID := counts[i]
 		if maxID < category.MinID() {
 			continue
 		}
@@ -196,12 +200,16 @@ func readLayout(r *binio.Reader, group *thing.FrameGroup, patternZ, durations bo
 func Encode(file *File, opts Options) ([]byte, error) {
 	w := binio.NewWriter(1 << 20)
 	w.U32(file.Signature)
-	for _, category := range thing.Categories {
+	for i, category := range thing.Categories {
 		maxID := file.MaxID(category)
-		if maxID > 0xFFFF {
-			return nil, fmt.Errorf("too many %ss: max id %d exceeds 65535", category, maxID)
+		if i == 0 && opts.Features.ExtendedItems {
+			w.U32(maxID)
+		} else {
+			if maxID > 0xFFFF {
+				return nil, fmt.Errorf("too many %ss: max id %d exceeds 65535", category, maxID)
+			}
+			w.U16(uint16(maxID))
 		}
-		w.U16(uint16(maxID))
 	}
 	for _, category := range thing.Categories {
 		for i, object := range file.Things[category] {

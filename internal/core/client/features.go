@@ -5,6 +5,8 @@ const DefaultSpriteSize = 32
 type Features struct {
 	// Extended stores sprite ids and the sprite count as u32 instead of u16.
 	Extended bool `json:"extended"`
+	// ExtendedItems stores the DAT item count as u32 instead of u16 (> 65535 items).
+	ExtendedItems bool `json:"extendedItems,omitempty"`
 	// Transparency stores an alpha channel for every colored sprite pixel.
 	Transparency bool `json:"transparency"`
 	// ImprovedAnimations stores per-frame durations, loop count and start frame.

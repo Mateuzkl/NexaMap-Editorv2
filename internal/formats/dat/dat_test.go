@@ -316,3 +316,23 @@ func TestUnsupportedListsLostFlags(t *testing.T) {
 		t.Fatalf("unsupported = %v", u)
 	}
 }
+
+func TestExtendedItemsRoundTrip(t *testing.T) {
+	opts := OptionsFor(1098, client.Features{Extended: true, ExtendedItems: true, FrameGroups: true, ImprovedAnimations: true})
+	src := sampleFile(true)
+	raw, err := Encode(src, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Extended items header is 14 bytes (4 sig + 4 items + 2 outfits + 2 effects + 2 missiles).
+	if len(raw) < 14 {
+		t.Fatalf("encoded too short: %d", len(raw))
+	}
+	got, err := Decode(raw, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MaxID(thing.CategoryItem) != src.MaxID(thing.CategoryItem) {
+		t.Fatalf("max item id = %d, want %d", got.MaxID(thing.CategoryItem), src.MaxID(thing.CategoryItem))
+	}
+}

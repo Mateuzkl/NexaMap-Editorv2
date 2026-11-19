@@ -22,11 +22,12 @@
 	});
 
 	const items: {
-		key: "extended" | "transparency" | "improvedAnimations" | "frameGroups";
+		key: "extended" | "extendedItems" | "transparency" | "improvedAnimations" | "frameGroups";
 		label: string;
 		hint: string;
 	}[] = [
 		{ key: "extended", label: "Extended", hint: "32-bit sprite ids (more than 65535 sprites)" },
+		{ key: "extendedItems", label: "Extended items", hint: "32-bit DAT item count (more than 65535 items)" },
 		{ key: "transparency", label: "Transparency", hint: "Sprites keep an alpha channel" },
 		{ key: "improvedAnimations", label: "Improved animations", hint: "Per-frame durations, loops and start frame" },
 		{ key: "frameGroups", label: "Frame groups", hint: "Separate idle and walking animations for outfits" },
@@ -35,15 +36,11 @@
 
 <div class="features">
 	{#each items as item}
+		{@const isForced = item.key !== "transparency" && item.key !== "extendedItems" && forced[item.key]}
 		<label class="row" title={item.hint}>
-			<input
-				class="t-check"
-				type="checkbox"
-				bind:checked={features[item.key]}
-				disabled={item.key !== "transparency" && forced[item.key]}
-			/>
+			<input class="t-check" type="checkbox" bind:checked={features[item.key]} disabled={isForced} />
 			<span>{item.label}</span>
-			{#if item.key !== "transparency" && forced[item.key]}<span class="t-label">(required)</span>{/if}
+			{#if isForced}<span class="t-label">(required)</span>{/if}
 		</label>
 	{/each}
 	<label class="row">
