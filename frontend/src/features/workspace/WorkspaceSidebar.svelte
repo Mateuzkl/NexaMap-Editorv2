@@ -76,7 +76,7 @@
 		<img class="ws-logo" src="/icon.png" alt="" width="24" height="24" draggable="false" />
 		{#if !collapsed}
 			<div class="ws-brand-text">
-				<span class="ws-brand-name">NexaMap</span>
+				<span class="ws-brand-name">NexaMap Editor</span>
 				<span class="ws-brand-sub">Modern Workspace</span>
 			</div>
 		{/if}

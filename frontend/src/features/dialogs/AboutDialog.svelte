@@ -8,7 +8,7 @@
 <Dialog title="About" width={380} onclose={() => (app.dialog = null)}>
 	<div class="col about">
 		<img src="/icon.png" alt="" width="48" height="48" />
-		<strong>NexaMap</strong>
+		<strong>NexaMap Editor</strong>
 		<span class="t-label">Version {updates.version || "dev"} · Based on OTS Creator</span>
 		<span>Object editor for Open Tibia clients (Tibia.dat / Tibia.spr, OBD).</span>
 		<span>© 2026 Marcin Jałocha (nekiro)</span>

@@ -85,7 +85,7 @@ wails3 task test       # Go + frontend unit tests
 Launch with a native Windows debug terminal attached:
 
 ```sh
-.\bin\otscreator.exe --console
+.\bin\"NexaMap Editor.exe" --console
 ```
 
 ---

@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  APP_NAME: "otscreator"
+  APP_NAME: "NexaMap Editor"
   # Release builds pass VERSION=x.y.z (CI uses the git tag); it ends up in the
   # binary (main.version) and the installer. Dev builds report "dev".
   VERSION: '{{.VERSION | default "dev"}}'

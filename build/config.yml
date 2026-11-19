@@ -6,7 +6,7 @@ version: '3'
 # This information is used to generate the build assets.
 info:
   companyName: "nekiro" # The name of the company
-  productName: "OTS Creator" # The name of the application
+  productName: "NexaMap Editor" # The name of the application
   productIdentifier: "com.nekiro.otscreator" # The unique product identifier
   description: "Object editor for Open Tibia clients" # The application description
   copyright: "(c) 2026 Marcin Jałocha (nekiro)" # Copyright text

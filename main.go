@@ -98,7 +98,7 @@ func main() {
 	}
 
 	wailsApp = application.New(application.Options{
-		Name:        "NexaMap",
+		Name:        "NexaMap Editor",
 		Description: "Object and map editor for Open Tibia clients",
 		Services: []application.Service{
 			application.NewService(projects),
@@ -155,7 +155,7 @@ func main() {
 		}
 	}
 	mainWindow = wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "NexaMap",
+		Title:            "NexaMap Editor",
 		Width:            1240,
 		Height:           680,
 		MinWidth:         1024,
