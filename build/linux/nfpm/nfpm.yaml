@@ -1,27 +1,27 @@
 # Package definition for the deb and rpm packages (wails3 tool package).
 # See https://nfpm.goreleaser.com. The release workflow replaces the version.
 
-name: "otscreator"
+name: "nexamap-editor"
 arch: ${GOARCH}
 platform: "linux"
 version: "0.1.0"
 section: "default"
 priority: "extra"
 maintainer: "nekiro"
-description: "Object editor for Open Tibia clients"
+description: "NexaMap Editor - Map and object editor for Open Tibia clients"
 vendor: "nekiro"
-homepage: "https://github.com/nekiro/ots-creator"
+homepage: "https://github.com/Mateuzkl/NexaMap-Editorv2"
 license: "Apache-2.0 WITH Commons-Clause"
 release: "1"
 
 contents:
-  - src: "./bin/otscreator"
-    dst: "/usr/bin/otscreator"
+  - src: "./bin/nexamap-editor"
+    dst: "/usr/bin/nexamap-editor"
   # appicon.png is 1024x1024, larger than the hicolor theme's sizes.
   - src: "./build/appicon.png"
-    dst: "/usr/share/pixmaps/otscreator.png"
-  - src: "./build/linux/otscreator.desktop"
-    dst: "/usr/share/applications/otscreator.desktop"
+    dst: "/usr/share/pixmaps/nexamap-editor.png"
+  - src: "./build/linux/nexamap-editor.desktop"
+    dst: "/usr/share/applications/nexamap-editor.desktop"
 
 # Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
 depends:
