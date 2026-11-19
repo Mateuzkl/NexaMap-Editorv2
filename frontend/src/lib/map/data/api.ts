@@ -1,10 +1,23 @@
 export * as MapService from "../../../../bindings/github.com/nekiro/ots-creator/internal/app/mapservice";
+export * as HuntForgeService from "../../../../bindings/github.com/nekiro/ots-creator/internal/app/huntforgeservice";
 export { Mode as ItemIdsMode } from "../../../../bindings/github.com/nekiro/ots-creator/internal/core/otitems/models";
+export {
+	Mode as HuntMode,
+	ShapeStyle as HuntShapeStyle,
+	type AnalysisSummary as HuntAnalysisSummary,
+	type Options as HuntOptions,
+	type Region as HuntRegion,
+	type Result as HuntResult,
+	type SpeciesCount as HuntSpeciesCount,
+	type Suggestion as HuntSuggestion,
+} from "../../../../bindings/github.com/nekiro/ots-creator/internal/mapping/huntforge/models";
 export type {
 	Appearance,
 	BrushPreview,
 	DataInfo,
 	FindResult as FindResponse,
+	HuntAnalysisView,
+	HuntGenerateView,
 	ItemIDsChoice,
 	ItemIDsPlan,
 	ItemTable,
