@@ -7,9 +7,9 @@
 
 <Dialog title="About" width={380} onclose={() => (app.dialog = null)}>
 	<div class="col about">
-		<img class="pixel" src="/icon.png" alt="" width="48" height="48" />
-		<strong>OTS Creator</strong>
-		<span class="t-label">Version {updates.version || "dev"}</span>
+		<img src="/icon.png" alt="" width="48" height="48" />
+		<strong>NexaMap</strong>
+		<span class="t-label">Version {updates.version || "dev"} · Based on OTS Creator</span>
 		<span>Object editor for Open Tibia clients (Tibia.dat / Tibia.spr, OBD).</span>
 		<span>© 2026 Marcin Jałocha (nekiro)</span>
 		<button class="link" onclick={() => Browser.OpenURL(REPO_URL)}>{REPO_URL.replace("https://", "")}</button>

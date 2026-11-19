@@ -77,8 +77,8 @@ func main() {
 	}
 
 	wailsApp = application.New(application.Options{
-		Name:        "OTS Creator",
-		Description: "Object editor for Open Tibia clients",
+		Name:        "NexaMap",
+		Description: "Object and map editor for Open Tibia clients",
 		Services: []application.Service{
 			application.NewService(projects),
 			application.NewService(things),
@@ -132,14 +132,14 @@ func main() {
 		}
 	}
 	mainWindow = wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "OTS Creator",
-		Width:            1440,
-		Height:           900,
+		Title:            "NexaMap",
+		Width:            1240,
+		Height:           680,
 		MinWidth:         1024,
 		MinHeight:        640,
-		Frameless:        true, // the menu bar draws Tibia-style window controls
+		Frameless:        true, // the menu bar draws window controls
 		EnableFileDrop:   true, // see data-file-drop-target in App.svelte
-		BackgroundColour: application.NewRGB(0x16, 0x16, 0x16),
+		BackgroundColour: application.NewRGB(0x08, 0x13, 0x19),
 		URL:              "/",
 	})
 	// Closing with uncompiled or unapplied changes asks first (in the UI).

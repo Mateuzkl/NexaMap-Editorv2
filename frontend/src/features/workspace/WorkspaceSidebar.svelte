@@ -75,7 +75,7 @@
 		<img class="ws-logo" src="/icon.png" alt="" width="24" height="24" draggable="false" />
 		{#if !collapsed}
 			<div class="ws-brand-text">
-				<span class="ws-brand-name">OTS Creator</span>
+				<span class="ws-brand-name">NexaMap</span>
 				<span class="ws-brand-sub">Modern Workspace</span>
 			</div>
 		{/if}
@@ -214,7 +214,7 @@
 	.ws-logo {
 		flex: none;
 		border-radius: 6px;
-		image-rendering: pixelated;
+		object-fit: contain;
 	}
 	.ws-brand-text {
 		display: flex;

@@ -94,7 +94,7 @@
 				},
 				{ label: "Project on GitHub", action: () => Browser.OpenURL(REPO_URL) },
 				"-",
-				{ label: "About OTS Creator", action: () => (app.dialog = "about") },
+				{ label: "About NexaMap", action: () => (app.dialog = "about") },
 			],
 		},
 	]);

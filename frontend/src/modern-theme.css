@@ -379,6 +379,194 @@
 	border-radius: 9px;
 	padding: 4px;
 	box-shadow: var(--ui-shadow);
+	border-image: none;
+	image-rendering: auto;
+}
+:root[data-ui-theme^="modern"] .t-menu-sep {
+	height: 1px;
+	margin: 4px 6px;
+	background: var(--ui-border);
+}
+:root[data-ui-theme^="modern"] .t-menu-entry {
+	color: var(--ui-text);
+	height: 26px;
+	padding: 0 10px;
+	border-radius: 6px;
+	font-size: 12.5px;
+}
+:root[data-ui-theme^="modern"] .t-menu-entry:hover:not(:disabled) {
+	background: var(--select);
+	color: var(--text-bright);
+}
+:root[data-ui-theme^="modern"] .t-menu-entry:disabled {
+	color: var(--text-disabled);
+}
+:root[data-ui-theme^="modern"] .t-menu-entry kbd {
+	color: var(--ui-muted);
+	text-shadow: none;
+}
+
+/* Select / ComboBox & Dropdown Popup (overrides Classic grey qcombo + background.png) */
+:root[data-ui-theme^="modern"] .t-select {
+	position: relative;
+	height: 28px;
+	padding: 0 26px 0 10px;
+	border: 1px solid var(--ui-border);
+	border-radius: 7px;
+	border-image: none;
+	background: var(--ui-bg);
+	color: var(--ui-text);
+	font: 400 var(--fs) / 1 var(--font);
+	image-rendering: auto;
+	transition:
+		border-color 0.12s ease,
+		background 0.12s ease;
+}
+:root[data-ui-theme^="modern"] .t-select::after {
+	content: "";
+	position: absolute;
+	right: 9px;
+	top: 50%;
+	width: 0;
+	height: 0;
+	margin-top: -2px;
+	border-left: 4px solid transparent;
+	border-right: 4px solid transparent;
+	border-top: 5px solid var(--ui-muted);
+	pointer-events: none;
+}
+:root[data-ui-theme^="modern"] .t-select:hover:not(:disabled),
+:root[data-ui-theme^="modern"] .t-select.on {
+	border-color: var(--ui-primary);
+	color: var(--text-bright);
+	background: var(--ui-surface-raised);
+}
+:root[data-ui-theme^="modern"] .t-select.on > *,
+:root[data-ui-theme^="modern"] .t-select:active:not(:disabled) > * {
+	transform: none;
+}
+:root[data-ui-theme^="modern"] .t-select:disabled {
+	opacity: 0.5;
+	color: var(--text-disabled);
+}
+:root[data-ui-theme^="modern"] .t-popup {
+	border: 1px solid var(--ui-border-strong);
+	border-image: none;
+	border-radius: 9px;
+	background: var(--ui-surface);
+	box-shadow: var(--ui-shadow);
+	padding: 4px;
+	image-rendering: auto;
+}
+:root[data-ui-theme^="modern"] .t-select-item {
+	height: 26px;
+	padding: 0 10px;
+	border-radius: 6px;
+	font: 400 12.5px / 26px var(--font);
+	color: var(--ui-text);
+}
+:root[data-ui-theme^="modern"] .t-select-item.sel {
+	color: var(--text-bright);
+	font-weight: 600;
+}
+:root[data-ui-theme^="modern"] .t-select-item.active {
+	background: var(--select);
+	color: var(--text-bright);
+}
+:root[data-ui-theme^="modern"] .t-select-item.disabled {
+	color: var(--text-disabled);
+}
+
+/* Checkboxes & Radio buttons (overrides Classic pixelated PNGs) */
+:root[data-ui-theme^="modern"] .t-check {
+	width: 15px;
+	height: 15px;
+	border-radius: 4px;
+	border: 1px solid var(--ui-border-strong);
+	background: var(--ui-bg);
+	background-image: none;
+	position: relative;
+	transition:
+		background 0.12s ease,
+		border-color 0.12s ease;
+}
+:root[data-ui-theme^="modern"] .t-check:hover:not(:disabled) {
+	border-color: var(--ui-primary);
+}
+:root[data-ui-theme^="modern"] .t-check:checked {
+	background: var(--ui-primary);
+	border-color: var(--ui-primary);
+	background-image: none;
+}
+:root[data-ui-theme^="modern"] .t-check:checked::after {
+	content: "";
+	position: absolute;
+	left: 4px;
+	top: 1px;
+	width: 4px;
+	height: 8px;
+	border: solid #ffffff;
+	border-width: 0 2px 2px 0;
+	transform: rotate(45deg);
+}
+:root[data-ui-theme^="modern"] .t-check[type="radio"] {
+	border-radius: 99px;
+	background-image: none;
+}
+:root[data-ui-theme^="modern"] .t-check[type="radio"]:checked::after {
+	left: 3px;
+	top: 3px;
+	width: 7px;
+	height: 7px;
+	border: 0;
+	border-radius: 99px;
+	background: #ffffff;
+	transform: none;
+}
+
+/* Modern Window Controls (overrides OTClient pixelated window_buttons.png) */
+:root[data-ui-theme^="modern"] .menubar .winctl {
+	gap: 4px;
+}
+:root[data-ui-theme^="modern"] .menubar .wbtn {
+	width: 26px;
+	height: 24px;
+	border-radius: 6px;
+	background: transparent;
+	image-rendering: auto;
+	position: relative;
+	color: var(--ui-muted);
+	transition:
+		background 0.12s ease,
+		color 0.12s ease;
+}
+:root[data-ui-theme^="modern"] .menubar .wbtn:hover {
+	background: var(--ui-surface-raised);
+	color: var(--ui-text);
+}
+:root[data-ui-theme^="modern"] .menubar .wbtn.close:hover {
+	background: var(--ui-danger);
+	color: #ffffff;
+}
+:root[data-ui-theme^="modern"] .menubar .wbtn.min::before {
+	content: "–";
+	font-size: 14px;
+	line-height: 24px;
+}
+:root[data-ui-theme^="modern"] .menubar .wbtn.max::before {
+	content: "□";
+	font-size: 12px;
+	line-height: 24px;
+}
+:root[data-ui-theme^="modern"] .menubar .wbtn.restore::before {
+	content: "❐";
+	font-size: 12px;
+	line-height: 24px;
+}
+:root[data-ui-theme^="modern"] .menubar .wbtn.close::before {
+	content: "×";
+	font-size: 16px;
+	line-height: 24px;
 }
 
 :root[data-ui-theme^="modern"] .t-tab {
@@ -461,24 +649,50 @@
 	box-shadow: none;
 }
 
-/* Scrollbars */
-:root[data-ui-theme^="modern"] ::-webkit-scrollbar {
+/* Scrollbars (override vertical/horizontal Classic Tibia scrollbar textures) */
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar,
+:root[data-ui-theme^="modern"].sb-fake-buttons ::-webkit-scrollbar:vertical,
+:root[data-ui-theme^="modern"].sb-fake-buttons ::-webkit-scrollbar:horizontal {
 	width: 10px;
 	height: 10px;
-}
-:root[data-ui-theme^="modern"] ::-webkit-scrollbar-track {
 	background: transparent;
 }
-:root[data-ui-theme^="modern"] ::-webkit-scrollbar-thumb {
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-track,
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-track:vertical,
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-track:horizontal,
+:root[data-ui-theme^="modern"].sb-fake-buttons ::-webkit-scrollbar-track:vertical,
+:root[data-ui-theme^="modern"].sb-fake-buttons ::-webkit-scrollbar-track:horizontal {
+	background: transparent;
+	margin: 0;
+}
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-thumb,
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-thumb:vertical,
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-thumb:horizontal {
+	border: 2px solid transparent;
+	border-image: none;
 	background: var(--ui-border);
 	border-radius: 99px;
-	border: 2px solid transparent;
 	background-clip: content-box;
 }
-:root[data-ui-theme^="modern"] ::-webkit-scrollbar-thumb:hover {
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-thumb:hover,
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-thumb:vertical:hover,
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-thumb:horizontal:hover {
 	background: var(--ui-border-strong);
 	border: 2px solid transparent;
 	background-clip: content-box;
+}
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-button,
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-button:single-button:vertical:decrement,
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-button:single-button:vertical:increment,
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-button:single-button:horizontal:decrement,
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-button:single-button:horizontal:increment {
+	display: none;
+	width: 0;
+	height: 0;
+	background: none;
+}
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-corner {
+	background: transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {

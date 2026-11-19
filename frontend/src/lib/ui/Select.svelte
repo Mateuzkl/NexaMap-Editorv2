@@ -151,7 +151,7 @@
 <button
 	bind:this={button}
 	type="button"
-	class="combo"
+	class="combo t-select"
 	class:on={open}
 	class:grow
 	style={width ? `width:${width}px` : ""}
@@ -180,7 +180,7 @@
 	>
 		{#each options as option, i}
 			<div
-				class="item"
+				class="item t-select-item"
 				class:active={i === active}
 				class:sel={i === selected}
 				class:disabled={option.disabled}

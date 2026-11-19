@@ -220,6 +220,7 @@
 		height: 100%;
 		display: flex;
 		flex-direction: column;
+		overflow: hidden;
 	}
 	main {
 		flex: 1;
