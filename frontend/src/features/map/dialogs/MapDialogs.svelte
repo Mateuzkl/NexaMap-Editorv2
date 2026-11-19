@@ -3,6 +3,7 @@
 	import BrushEditorDialog from "./BrushEditorDialog.svelte";
 	import CollabDialog from "./CollabDialog.svelte";
 	import DataDialog from "./DataDialog.svelte";
+	import HuntForgeDialog from "./HuntForgeDialog.svelte";
 	import ImportMapDialog from "./ImportMapDialog.svelte";
 	import MapToolsDialog from "./MapToolsDialog.svelte";
 	import MinimapExportDialog from "./MinimapExportDialog.svelte";
@@ -21,6 +22,7 @@
 	{#if map.dialog === "import"}<ImportMapDialog />{/if}
 	{#if map.dialog === "minimap"}<MinimapExportDialog />{/if}
 	{#if map.dialog === "tools"}<MapToolsDialog />{/if}
+	{#if map.dialog === "huntforge"}<HuntForgeDialog />{/if}
 	{#if map.dialog === "warnings"}<WarningsDialog />{/if}
 	{#if map.dialog === "text" && map.textItem}<TextDialog />{/if}
 {/if}

@@ -35,7 +35,17 @@ export interface BrushSel {
 }
 
 export type MapDialog =
-	"data" | "import" | "minimap" | "brush" | "tools" | "shortcuts" | "warnings" | "text" | "collab" | null;
+	| "data"
+	| "import"
+	| "minimap"
+	| "brush"
+	| "tools"
+	| "shortcuts"
+	| "warnings"
+	| "text"
+	| "collab"
+	| "huntforge"
+	| null;
 
 export type Focus =
 	| { kind: "tile" }

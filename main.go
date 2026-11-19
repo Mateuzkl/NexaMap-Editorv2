@@ -123,6 +123,7 @@ func main() {
 			application.NewService(debugService),
 			application.NewService(app.NewMarketService(session, prefs)),
 			application.NewService(maps),
+			application.NewService(app.NewHuntForgeService(maps)),
 			application.NewService(collabService),
 		},
 		Assets: application.AssetOptions{

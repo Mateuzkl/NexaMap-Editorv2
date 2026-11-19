@@ -50,6 +50,11 @@
 			onclick={() => ((map.editBrush = { name: "", type: "fromSelection" }), (map.dialog = "brush"))}
 			>Make brush…</button
 		>
+		<button
+			class="txt"
+			title="Clonar, expandir ou gerar uma hunt nova a partir da seleção"
+			onclick={() => (map.dialog = "huntforge")}>Hunt Forge…</button
+		>
 		<button title="More tools for the selection" onclick={() => (map.dialog = "tools")}
 			><Icon name="tools" /></button
 		>

@@ -193,6 +193,29 @@
 						</article>
 
 						<article class="ws-tool-card">
+							<h3>Hunt Forge</h3>
+							<p>
+								Detect, analyze, clone, expand, and procedurally generate hunts directly inside any open
+								map or export as <code>.otbm</code> + <code>-spawn.xml</code>.
+							</p>
+							<button
+								type="button"
+								class="ws-btn ws-btn-secondary"
+								disabled={!app.open || map.activeId === null}
+								title={map.activeId !== null
+									? "Open Hunt Forge on the active map"
+									: "Open a map first to use Hunt Forge"}
+								onclick={() => {
+									app.showWorkspace = false;
+									map.mode = "map";
+									map.dialog = "huntforge";
+								}}
+							>
+								Open Hunt Forge…
+							</button>
+						</article>
+
+						<article class="ws-tool-card">
 							<h3>Server Data &amp; RME Brushes</h3>
 							<p>Configure `items.otb`, `items.xml`, and import Remere's Map Editor brush sets.</p>
 							<button

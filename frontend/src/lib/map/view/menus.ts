@@ -156,6 +156,7 @@ export function mapMenus(): { label: string; items: MenuEntry[] }[] {
 					disabled: () => noMap() || map.active?.itemMode !== "otb" || !!app.busy,
 				},
 				{ label: "Map tools…", action: () => (map.dialog = "tools"), disabled: noMap },
+				{ label: "Hunt Forge (Gerador de Hunts)…", action: () => (map.dialog = "huntforge"), disabled: noMap },
 				{
 					label: `Load warnings… (${map.activeId !== null ? warningCount(map.loadWarnings[map.activeId]).toLocaleString() : 0})`,
 					action: () => (map.dialog = "warnings"),
