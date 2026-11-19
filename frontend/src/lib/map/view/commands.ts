@@ -1,7 +1,7 @@
 import { Events } from "@wailsio/runtime";
 import { DialogService, WindowService, encodeBytes, errorMessage } from "../../api";
 import { clamp } from "../../util/math";
-import { ask } from "../../confirm.svelte";
+import { ask, choose } from "../../confirm.svelte";
 import { openContextMenu, type MenuEntry } from "../../menu.svelte";
 import { app, run, toast } from "../../state/app.svelte";
 import { ItemIdsMode, MapService, SpawnFormat, type ItemIDsChoice, type Position } from "../data/api";
@@ -249,16 +249,21 @@ export const mapCommands = {
 	},
 
 	async save(as = false): Promise<boolean> {
-		const active = map.active;
-		if (!active) return false;
-		let path = active.path;
+		if (map.activeId === null) return false;
+		return mapCommands.saveMap(map.activeId, as);
+	},
+
+	async saveMap(targetId: number, as = false): Promise<boolean> {
+		const target = map.maps.find((open) => open.id === targetId);
+		if (!target) return false;
+		let path = target.path;
 		if (as || !path) {
 			// The format follows the extension; the map's own format is offered first.
 			path = await DialogService.SaveFile(
 				"saveMap",
-				"Save map",
-				active.name,
-				isOTMAP(active.name) ? [OTMAP, OTBM] : [OTBM, OTMAP],
+				`Save map (${target.name})`,
+				target.name,
+				isOTMAP(target.name) ? [OTMAP, OTBM] : [OTBM, OTMAP],
 			);
 			if (!path) return false;
 		}
@@ -266,10 +271,10 @@ export const mapCommands = {
 		const title = "Saving map";
 		const stopProgress = trackProgress(name, title);
 		try {
-			const change = await MapService.SaveMap(active.id, path);
+			const change = await MapService.SaveMap(target.id, path);
 			stopProgress();
 			map.loading = { name, step: "Reloading the item data", percent: 100, title };
-			applyChange(active.id, change);
+			applyChange(target.id, change);
 			await loadMapData();
 			toast(`Saved ${change.info.name}.`, "success");
 			return true;
@@ -311,12 +316,14 @@ export const mapCommands = {
 			if (!ok) return;
 		}
 		if (closing.changed && !(shared && collab.role === "guest")) {
-			const ok = await ask({
-				title: "Unsaved map",
-				message: `${closing.name} has unsaved changes. Close it anyway?`,
-				ok: "Close",
+			const choice = await choose({
+				title: "Unsaved Map",
+				message: `Do you want to save changes to ${closing.name} before closing?`,
+				ok: "Save",
+				alt: "Don't Save",
 			});
-			if (!ok) return;
+			if (!choice) return;
+			if (choice === "ok" && !(await mapCommands.saveMap(closing.id))) return;
 		}
 		await MapService.CloseMap(closing.id);
 		map.maps = map.maps.filter((open) => open.id !== closing.id);

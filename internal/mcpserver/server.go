@@ -142,7 +142,7 @@ func (s *Server) newMCPServer() *mcp.Server {
 	if s.standalone {
 		text += standaloneNote
 	}
-	server := mcp.NewServer(&mcp.Implementation{Name: "ots-creator", Title: "OTS Creator map editor", Version: s.version}, &mcp.ServerOptions{
+	server := mcp.NewServer(&mcp.Implementation{Name: "nexamap-editor", Title: "NexaMap Editor", Version: s.version}, &mcp.ServerOptions{
 		Instructions: text,
 		Capabilities: &mcp.ServerCapabilities{},
 	})
@@ -162,7 +162,7 @@ func (s *Server) newMCPServer() *mcp.Server {
 	return server
 }
 
-const instructions = `OTS Creator edits Open Tibia maps (OTBM, or the OTMAP text format) with the sprites of an open client. The edits show live in the editor window and can be undone there.
+const instructions = `NexaMap Editor edits Open Tibia maps (OTBM, or the OTMAP text format) with the sprites of an open client. The edits show live in the editor window and can be undone there.
 
 Coordinates: x grows east, y grows south, z is the floor: 7 is the ground level, 0-6 are above it, 8-15 underground. Every tool takes mapId; 0 or none means the map shown in the editor.
 

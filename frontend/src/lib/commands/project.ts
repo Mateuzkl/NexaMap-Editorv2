@@ -1,6 +1,7 @@
 import { CompareService, DialogService, Format, ProjectService, WindowService, type Recent } from "../api";
-import { ask } from "../confirm.svelte";
+import { ask, choose } from "../confirm.svelte";
 import { map } from "../map/state.svelte";
+import { mapCommands } from "../map/view/commands";
 import { app, applyDraft, revertDraft, run, toast } from "../state/app.svelte";
 import { offerOptimize, openedNote, otbNote, sheetsNote } from "./compile";
 import { confirmLeave, guard } from "./shared";
@@ -92,7 +93,8 @@ export const projectCommands = {
 	/** Window close with unsaved work or a running export (the backend held
 	 * the close). */
 	async quit() {
-		const maps = map.maps.filter((open) => open.changed).map((open) => open.name);
+		const dirtyMaps = map.maps.filter((open) => open.changed);
+		const maps = dirtyMaps.map((open) => open.name);
 		const lost = [
 			maps.length && `unsaved maps (${maps.join(", ")})`,
 			app.stoppable && "an export in progress",
@@ -100,8 +102,34 @@ export const projectCommands = {
 			app.project?.info.changed && "uncompiled client changes",
 			app.other?.info.changed && "uncompiled changes in the compared client",
 		].filter(Boolean);
-		const message = `You have ${lost.join(" and ") || "unsaved changes"}. Quit anyway?`;
-		if (await ask({ title: "Quit OTS Creator", message, ok: "Quit" })) await WindowService.Quit();
+		const canSave = dirtyMaps.length > 0 || app.dirty || !!app.project?.info.changed;
+		if (!canSave) {
+			const message = `You have ${lost.join(" and ") || "unsaved changes"}. Exit anyway?`;
+			if (await ask({ title: "Exit NexaMap Editor", message, ok: "Exit" })) await WindowService.Quit();
+			return;
+		}
+		const message = `You have ${lost.join(" and ") || "unsaved changes"}. Do you want to save before exiting?`;
+		const choice = await choose({
+			title: "Exit NexaMap Editor",
+			message,
+			ok: "Save & Exit",
+			alt: "Don't Save",
+		});
+		if (!choice) return;
+		if (choice === "ok") {
+			for (const open of dirtyMaps) {
+				if (!(await mapCommands.saveMap(open.id))) return;
+			}
+			if (app.dirty) {
+				await applyDraft();
+				if (app.dirty) return;
+			}
+			if (app.project?.info.changed) {
+				await projectCommands.compile();
+				if (app.project?.info.changed) return;
+			}
+		}
+		await WindowService.Quit();
 	},
 
 	async undo() {

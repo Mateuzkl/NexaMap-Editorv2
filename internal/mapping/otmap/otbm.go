@@ -47,7 +47,7 @@ const (
 	attrAttributeMap  = 128
 )
 
-var Generator = "OTS Creator"
+var Generator = "NexaMap Editor"
 
 var ErrNotOTBM = errors.New("not an OTBM map")
 

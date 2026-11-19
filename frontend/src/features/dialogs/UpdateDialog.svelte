@@ -29,7 +29,7 @@
 <Dialog title="Update available" width={460} onclose={close}>
 	{#if release}
 		<div class="col">
-			<p>OTS Creator <strong>{release.version}</strong> is available. You have {updates.version}.</p>
+			<p>NexaMap Editor <strong>{release.version}</strong> is available. You have {updates.version}.</p>
 			{#if release.notes}
 				<div class="notes t-panel">{release.notes}</div>
 			{/if}
@@ -41,7 +41,7 @@
 						? `${megabytes(updates.progress.written)} / ${megabytes(updates.progress.total)} MB`
 						: STAGES[updates.stage]}
 				/>
-				<p class="t-label">OTS Creator restarts into the new version when the update is installed.</p>
+				<p class="t-label">NexaMap Editor restarts into the new version when the update is installed.</p>
 			{/if}
 		</div>
 	{/if}

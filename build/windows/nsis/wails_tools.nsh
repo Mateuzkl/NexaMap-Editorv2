@@ -11,7 +11,7 @@
     !define INFO_COMPANYNAME "nekiro"
 !endif
 !ifndef INFO_PRODUCTNAME
-    !define INFO_PRODUCTNAME "OTS Creator"
+    !define INFO_PRODUCTNAME "NexaMap Editor"
 !endif
 !ifndef INFO_PRODUCTVERSION
     !define INFO_PRODUCTVERSION "0.1.0"

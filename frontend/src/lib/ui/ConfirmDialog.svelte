@@ -15,7 +15,11 @@
 				class:danger={question.danger ?? DESTRUCTIVE.test(question.ok)}
 				onclick={() => answer(true)}>{question.ok}</button
 			>
-			{#if question.alt}<button class="t-btn" onclick={() => answer("alt")}>{question.alt}</button>{/if}
+			{#if question.alt}<button
+					class="t-btn"
+					class:danger={DESTRUCTIVE.test(question.alt)}
+					onclick={() => answer("alt")}>{question.alt}</button
+				>{/if}
 			<button class="t-btn" onclick={() => answer(false)}>Cancel</button>
 		{/snippet}
 	</Dialog>

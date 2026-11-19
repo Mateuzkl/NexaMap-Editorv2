@@ -1,11 +1,12 @@
+import { ProjectService } from "../api";
 import { formatSize } from "../util/format";
-import { ask } from "../confirm.svelte";
+import { ask, choose } from "../confirm.svelte";
 import { prefs } from "../state/prefs.svelte";
-import { app, toast } from "../state/app.svelte";
+import { app, applyDraft, run, toast } from "../state/app.svelte";
 
 export const OBJECT_FILTERS = [
 	{ name: "Object files (*.otobj, *.obd)", pattern: "*.otobj;*.obd" },
-	{ name: "OTS Creator objects (*.otobj)", pattern: "*.otobj" },
+	{ name: "NexaMap objects (*.otobj)", pattern: "*.otobj" },
 	{ name: "Object Builder Data (*.obd)", pattern: "*.obd" },
 ];
 
@@ -39,16 +40,37 @@ export function guard(): boolean {
 
 export async function confirmDiscard(): Promise<boolean> {
 	if (!app.dirty) return true;
-	return ask({
+	const choice = await choose({
 		title: "Unapplied changes",
-		message: "The selected object has unapplied changes. Discard them?",
-		ok: "Discard",
+		message: "The selected object has unapplied changes. Do you want to save them first?",
+		ok: "Save",
+		alt: "Don't Save",
 	});
+	if (!choice) return false;
+	if (choice === "ok") {
+		await applyDraft();
+		return !app.dirty;
+	}
+	return true;
 }
 
 export async function confirmLeave(title: string, ok: string): Promise<boolean> {
 	if (!(await confirmDiscard())) return false;
 	if (!app.project?.info.changed) return true;
+	if (app.project.info.datPath) {
+		const choice = await choose({
+			title,
+			message: "The client has uncompiled changes. Do you want to save and compile before continuing?",
+			ok: "Save & " + ok,
+			alt: "Don't Save",
+		});
+		if (!choice) return false;
+		if (choice === "ok") {
+			const stats = await run("Compiling", () => ProjectService.Compile());
+			return !!stats && !app.project?.info.changed;
+		}
+		return true;
+	}
 	return ask({ title, message: "The client has uncompiled changes. Continue anyway?", ok });
 }
 
@@ -56,4 +78,4 @@ export const savedNote = (bytes: number) => (bytes > 0 ? `, saves ${formatSize(b
 
 /** Text put on the system clipboard by Copy object, so a later paste does
  * not pick up an image copied before it. */
-export const OBJECT_CLIP = "OTS Creator object";
+export const OBJECT_CLIP = "NexaMap Editor object";

@@ -13,7 +13,7 @@ export interface Question {
 /** The button that closed a question; null is Cancel. */
 export type Choice = "ok" | "alt" | null;
 
-export const DESTRUCTIVE = /^(remove|delete|discard|clear|erase|reset)\b/i;
+export const DESTRUCTIVE = /^(remove|delete|discard|clear|erase|reset|don't save)\b/i;
 
 export const confirmState = $state<{ question: (Question & { resolve: (choice: Choice) => void }) | null }>({
 	question: null,

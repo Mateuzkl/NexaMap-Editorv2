@@ -148,7 +148,7 @@
 			<div class="sect">
 				<div class="h">You are hosting {collab.status?.session.name}</div>
 				<p class="t-label hint">
-					Send the invite code to the people you map with. In OTS Creator they choose <b>Map together</b> ›
+					Send the invite code to the people you map with. In NexaMap Editor they choose <b>Map together</b> ›
 					<b>Join</b> and paste it. The code holds your addresses, the key of this computer and the password.
 				</p>
 				<div class="row">
@@ -328,8 +328,8 @@
 						on my network
 					</label>
 					<p class="t-label hint">
-						Everyone needs the same client and items as you. Your system may ask to let OTS Creator accept
-						connections: allow it.
+						Everyone needs the same client and items as you. Your system may ask to let NexaMap Editor
+						accept connections: allow it.
 					</p>
 				</div>
 			{/if}

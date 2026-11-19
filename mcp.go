@@ -23,7 +23,7 @@ const mcpCommand = app.MCPCommand
 // without a window. stdout carries the protocol, so logs go to stderr.
 func runMCP() int {
 	log.SetOutput(os.Stderr)
-	app.Generator = "OTS Creator " + version
+	app.Generator = "NexaMap Editor " + version
 	session := app.NewSession(nil)
 	maps := app.NewMapService(session, app.OpenMapStore())
 	agents := mcpserver.New(maps, app.NewProjectService(session), app.NewThingService(session), nil, version)

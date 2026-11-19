@@ -253,9 +253,9 @@
 					<button class="t-btn" onclick={copyMCPCommand}>Copy command</button>
 				</div>
 				<p class="t-label note">
-					Copy command gives the line that adds OTS Creator to Claude Code. The agent starts it by itself and
-					works with the editor closed too; while this server is on, its edits go to the open editor and show
-					here. Only programs on this computer can connect.
+					Copy command gives the line that adds NexaMap Editor to Claude Code. The agent starts it by itself
+					and works with the editor closed too; while this server is on, its edits go to the open editor and
+					show here. Only programs on this computer can connect.
 				</p>
 			{:else if section === "objects"}
 				<h4>Layout</h4>

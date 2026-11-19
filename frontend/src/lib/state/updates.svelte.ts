@@ -43,7 +43,7 @@ export async function checkForUpdates(manual: boolean): Promise<void> {
 		if (info.available) {
 			if (!app.dialog) app.dialog = "update";
 		} else if (manual) {
-			toast(`OTS Creator ${updates.version} is up to date.`, "success");
+			toast(`NexaMap Editor ${updates.version} is up to date.`, "success");
 		}
 	} catch (event) {
 		if (manual) toast(`Update check failed: ${errorMessage(event)}`, "error");

@@ -81,17 +81,17 @@
 				{#if workspace.activeSection === "workspace"}
 					<h1 class="ws-title">Workspace</h1>
 					<p class="ws-subtitle">
-						Select your client and server folders. OTS Creator detects resources and maps automatically.
+						Select your client and server folders. NexaMap Editor detects resources and maps automatically.
 					</p>
 				{:else if workspace.activeSection === "converters"}
 					<h1 class="ws-title">Converters &amp; Tools</h1>
 					<p class="ws-subtitle">
-						Direct access to OTS Creator's built-in format conversion, comparison, and asset tools.
+						Direct access to NexaMap Editor's built-in format conversion, comparison, and asset tools.
 					</p>
 				{:else}
 					<h1 class="ws-title">Multiplayer</h1>
 					<p class="ws-subtitle">
-						Collaborate live on a shared map using OTS Creator's built-in collaborative editor.
+						Collaborate live on a shared map using NexaMap Editor's built-in collaborative editor.
 					</p>
 				{/if}
 			</div>
@@ -209,7 +209,7 @@
 					<section class="ws-mp-card">
 						<h3>Join a Shared Map</h3>
 						<p class="ws-mp-desc">
-							Paste an invite code (<code>ots:…</code>) or host address shared by another OTS Creator
+							Paste an invite code (<code>ots:…</code>) or host address shared by another NexaMap Editor
 							user. Requires a valid client selected in Workspace (or already open).
 						</p>
 						<div class="ws-mp-row">

@@ -284,7 +284,7 @@ func (h *Host) serve(raw net.Conn) {
 // check returns why a guest cannot join ("": it can).
 func (h *Host) check(greeting hello) string {
 	if greeting.Protocol != Protocol {
-		return "the host uses another version of OTS Creator: update both to the same version"
+		return "the host uses another version of NexaMap Editor: update both to the same version"
 	}
 	if subtle.ConstantTimeCompare([]byte(greeting.Password), []byte(h.config.Password)) != 1 {
 		// Slows down guessing.

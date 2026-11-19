@@ -54,7 +54,7 @@ type sentEdit struct {
 }
 
 // ErrUnreachable means no address of the invite answered.
-var ErrUnreachable = errors.New("cannot reach the host: check the address, that the host's firewall allows OTS Creator and that the port is open on the host's router (or use the same VPN, like Tailscale, ZeroTier or Radmin VPN)")
+var ErrUnreachable = errors.New("cannot reach the host: check the address, that the host's firewall allows NexaMap Editor and that the port is open on the host's router (or use the same VPN, like Tailscale, ZeroTier or Radmin VPN)")
 
 // dial connects to the first address of the invite that answers with the
 // right certificate.

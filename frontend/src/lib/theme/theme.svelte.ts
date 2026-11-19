@@ -12,7 +12,7 @@ export const UI_THEMES: readonly ThemeMeta[] = [
 		id: "classic",
 		label: "Classic Tibia",
 		shortLabel: "Classic",
-		description: "Original OTS Creator interface with Tibia textures, bevel frames, and pixel fonts.",
+		description: "Classic interface with Tibia textures, bevel frames, and pixel fonts.",
 	},
 	{
 		id: "modern-dark",

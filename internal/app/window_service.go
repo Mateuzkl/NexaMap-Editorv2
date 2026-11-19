@@ -58,7 +58,7 @@ func (ws *WindowService) OpenPlayWindow(mapID, x, y, z int) {
 	focus := ws.focusPlay
 	if focus == nil && ws.OpenWindow != nil {
 		url := fmt.Sprintf("/?play=%d&x=%d&y=%d&z=%d", mapID, x, y, z)
-		ws.focusPlay = ws.OpenWindow(url, "OTS Creator - Play", 1100, 860, func() {
+		ws.focusPlay = ws.OpenWindow(url, "NexaMap Editor - Play", 1100, 860, func() {
 			ws.playMu.Lock()
 			ws.focusPlay = nil
 			ws.playMu.Unlock()

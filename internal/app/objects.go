@@ -20,7 +20,7 @@ const (
 
 // Generator names this program in written OTOBJ files; main adds the
 // version.
-var Generator = "OTS Creator"
+var Generator = "NexaMap Editor"
 
 func isObjectFile(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
