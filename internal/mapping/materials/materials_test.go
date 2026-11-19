@@ -145,7 +145,9 @@ func TestScanCreatures(t *testing.T) {
 		"monster/rat.xml":         `<?xml version="1.0"?><monster name="Rat" race="blood"><look type="21" corpse="5964"/></monster>`,
 		"npc/bob.xml":             `<npc name="Bob"><look type="128" head="20" body="30" legs="40" feet="50" addons="3"/></npc>`,
 		"monster/dragon.lua":      "local mType = Game.createMonsterType(\"Dragon\")\nlocal monster = {}\nmonster.outfit = {\n\tlookType = 34,\n\tlookHead = 0,\n\tlookMount = 7\n}\n",
+		"monster/acqua.lua":       "local row = {\n\tname = \"Acqua\",\n\tlook = { type = 383, head = 1, body = 2, legs = 3, feet = 4 }\n}\nlocal mtype = assert(Game.createMonsterType(row.name))\n",
 		"npc/sam.lua":             "local internalNpcName = \"Sam\"\nlocal npcType = Game.createNpcType(internalNpcName)\nlocal npcConfig = {}\nnpcConfig.outfit = { lookType = 131, lookBody = 5 }\n",
+		"npc/armors_trader.lua":   "local definition = {\n\tkey = \"Armors Trader\",\n\tname = \"Armors Trader\",\n\tlook = { type = 451 }\n}\nlocal npcType = assert(Game.createNpcType(definition.key))\n",
 		"monster/monsters.xml":    `<monsters><monster name="Rat" file="rat.xml"/><monster name="cave rat" file="rat.xml"/><monster name="Ghost" file="missing.xml"/></monsters>`,
 		"scripts/other.lua":       "print('hi')",
 		"items/items.xml":         `<items/>`,
@@ -161,12 +163,18 @@ func TestScanCreatures(t *testing.T) {
 	for _, c := range got {
 		byName[c.Name] = c
 	}
-	if len(got) != 6 {
+	if len(got) != 8 {
 		names := []string{}
 		for _, c := range got {
 			names = append(names, c.Name)
 		}
 		t.Fatalf("found %v", names)
+	}
+	if a := byName["Acqua"]; a == nil || a.NPC || a.Outfit.LookType != 383 || a.Outfit.Feet != 4 {
+		t.Fatalf("acqua = %+v", a)
+	}
+	if at := byName["Armors Trader"]; at == nil || !at.NPC || at.Outfit.LookType != 451 {
+		t.Fatalf("armors trader = %+v", at)
 	}
 	if r := byName["Rat"]; r.NPC || r.Outfit.LookType != 21 {
 		t.Fatalf("rat = %+v", r)

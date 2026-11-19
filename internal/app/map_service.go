@@ -129,7 +129,7 @@ func (ms *MapService) withMapRead(id int, fn func(opened *openMap, data *mapData
 func (ms *MapService) withData(fn func(data *mapData) error) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
-	data, err := ms.dataOf(ms.activeMode())
+	data, err := ms.activeData()
 	if err != nil {
 		return err
 	}

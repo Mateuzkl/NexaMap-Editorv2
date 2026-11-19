@@ -194,6 +194,9 @@ func (c *Chunk) eachPtr(fn func(tile *Tile)) {
 }
 
 func (c *Chunk) eachStored(fn func(pos Position, tile *Tile)) {
+	if len(c.ptrs) == 0 {
+		return
+	}
 	for i := range c.cells {
 		if cell := c.cells[i]; cell&cellPtr != 0 {
 			fn(Position{c.X<<ChunkBits | uint16(i&(ChunkSize-1)), c.Y<<ChunkBits | uint16(i>>ChunkBits), c.Z}, c.ptrs[cell&^cellPtr])

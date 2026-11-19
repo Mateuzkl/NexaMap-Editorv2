@@ -17,6 +17,15 @@ func (p *Project) Thing(category thing.Category, id uint32) (*thing.Thing, error
 	return object.Clone(), nil
 }
 
+// ItemsSnapshot returns a shallow snapshot of the item slice for read-only
+// inspection (such as building the map editor item table) without cloning
+// every Thing struct and its sprite slices.
+func (p *Project) ItemsSnapshot() []*thing.Thing {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return slices.Clone(p.things.Things[thing.CategoryItem])
+}
+
 func (p *Project) ThingRange(category thing.Category, from, to uint32) []*thing.Thing {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

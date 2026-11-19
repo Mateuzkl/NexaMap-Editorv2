@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from "svelte";
 	import { app } from "../../lib/state/app.svelte";
 	import { readJson, saveJson } from "../../lib/state/storage";
 	import { MapService } from "../../lib/map/data/api";
@@ -25,27 +24,17 @@
 
 	let { hoverText = $bindable("") }: { hoverText?: string } = $props();
 
-	// The client may have changed while the object editor was shown.
-	let lastProject: unknown = null;
+	// Reload map data when the open client or the active map's ID mode changes,
+	// or if item tables have not been populated yet.
+	let lastDataKey = "";
 	$effect(() => {
-		const project = app.project?.open ? app.project.info.datPath || app.project.info.version.name : null;
-		if (project !== lastProject) {
-			lastProject = project;
+		const project = app.project?.open ? app.project.info.datPath || app.project.info.version.name : "";
+		const key = `${project}|${map.activeId ?? ""}|${map.active?.itemMode ?? ""}`;
+		if (key !== lastDataKey) {
+			lastDataKey = key;
 			void loadMapData(true);
-		}
-	});
-
-	onMount(() => {
-		void loadMapData();
-	});
-
-	// Conversion and Undo/Redo can change one tab's ID mode.
-	let lastItemMode = "";
-	$effect(() => {
-		const key = `${map.activeId}:${map.active?.itemMode ?? ""}`;
-		if (key !== lastItemMode) {
-			lastItemMode = key;
-			void loadMapData(true);
+		} else if (project && (!map.data?.ready || !map.items || !map.palette)) {
+			void loadMapData(false);
 		}
 	});
 
@@ -231,10 +220,18 @@
 										for automatic borders, walls and decoration.
 									</div>
 								{/if}
+							{:else if map.data?.error}
+								<div class="t-label">{map.data.error}</div>
+								<div class="row">
+									<button class="t-btn primary" onclick={() => loadMapData(true)}>Retry</button>
+									<button class="t-btn" onclick={() => (map.dialog = "data")}>Server data…</button>
+								</div>
 							{:else}
 								<div class="t-label loading"><span class="t-spinner"></span>Loading the item data…</div>
 							{/if}
-							<button class="t-btn" onclick={() => (map.dialog = "data")}>Server data…</button>
+							{#if !map.data?.error}
+								<button class="t-btn" onclick={() => (map.dialog = "data")}>Server data…</button>
+							{/if}
 						</div>
 						<p class="t-label keys">
 							<kbd>Ctrl+N</kbd> new · <kbd>Ctrl+O</kbd> open · <kbd>Ctrl+K</kbd> go to anything ·

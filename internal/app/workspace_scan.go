@@ -132,6 +132,8 @@ func inspectClientWorkspace(root, selectedClientPath string, rememberedOTB func(
 			Ambiguous:  true,
 			Error:      "Multiple client files found in this folder. Choose which client to use.",
 		}
+	} else if len(candidates) == 1 {
+		inspectTarget = candidates[0].Path
 	}
 
 	files, err := inspectClient(inspectTarget)
@@ -167,28 +169,52 @@ func findClientCandidates(root string, isDir bool) []ClientCandidate {
 		}
 		return []ClientCandidate{{Path: root, Kind: kind, Label: filepath.Base(root)}}
 	}
-	entries, err := os.ReadDir(root)
-	if err != nil {
+	if _, err := os.ReadDir(root); err != nil {
 		return nil
 	}
 	byBase := map[string]ClientCandidate{}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
+	collectDir := func(dir, labelPrefix string) {
+		dirEntries, err := os.ReadDir(dir)
+		if err != nil {
+			return
 		}
-		name := entry.Name()
-		ext := strings.ToLower(filepath.Ext(name))
-		if ext != ".otfi" && ext != ".dat" {
-			continue
+		for _, entry := range dirEntries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			ext := strings.ToLower(filepath.Ext(name))
+			if ext != ".otfi" && ext != ".dat" {
+				continue
+			}
+			baseKey := strings.ToLower(filepath.Join(dir, fsutil.TrimExt(name)))
+			full := filepath.Join(dir, name)
+			label := name
+			if labelPrefix != "" {
+				label = filepath.ToSlash(filepath.Join(labelPrefix, name))
+			}
+			// An .otfi and .dat sharing a base name represent one client; .otfi wins.
+			if prev, exists := byBase[baseKey]; !exists || (prev.Kind == "dat" && ext == ".otfi") {
+				byBase[baseKey] = ClientCandidate{
+					Path:  full,
+					Kind:  strings.TrimPrefix(ext, "."),
+					Label: label,
+				}
+			}
 		}
-		baseKey := strings.ToLower(fsutil.TrimExt(name))
-		full := filepath.Join(root, name)
-		// An .otfi and .dat sharing a base name represent one client; .otfi wins.
-		if prev, exists := byBase[baseKey]; !exists || (prev.Kind == "dat" && ext == ".otfi") {
-			byBase[baseKey] = ClientCandidate{
-				Path:  full,
-				Kind:  strings.TrimPrefix(ext, "."),
-				Label: name,
+	}
+	collectDir(root, "")
+	if len(byBase) == 0 {
+		for _, sub := range []string{filepath.Join("data", "things"), "things"} {
+			thingsDir := filepath.Join(root, sub)
+			subEntries, err := os.ReadDir(thingsDir)
+			if err != nil {
+				continue
+			}
+			for _, subEntry := range subEntries {
+				if subEntry.IsDir() {
+					collectDir(filepath.Join(thingsDir, subEntry.Name()), filepath.Join(sub, subEntry.Name()))
+				}
 			}
 		}
 	}

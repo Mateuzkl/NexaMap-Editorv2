@@ -5,12 +5,16 @@
 		DialogService,
 		Format,
 		ProjectService,
+		ResourceState,
 		errorMessage,
 		type ClientFiles,
 		type Features,
 		type Version,
 	} from "../../lib/api";
 	import { app, run, toast } from "../../lib/state/app.svelte";
+	import { MapService } from "../../lib/map/data/api";
+	import { loadMapData, map } from "../../lib/map/state.svelte";
+	import { workspace } from "../workspace/workspace.svelte";
 	import Dialog from "../../lib/ui/Dialog.svelte";
 	import Select from "../../lib/ui/Select.svelte";
 	import FeaturesEditor from "./FeaturesEditor.svelte";
@@ -103,15 +107,50 @@
 		}
 	}
 
+	function guessVersionFromFiles(inspected: ClientFiles): Version | null {
+		const bySig = versions.find(
+			(v) => v.sprSignature === inspected.sprSignature || v.datSignature === inspected.datSignature,
+		);
+		if (bySig) return bySig;
+		const folderMatch = inspected.datPath.match(/[\\/](7\d\d|8\d\d|9\d\d|10\d\d|11\d\d|12\d\d|13\d\d)\b/);
+		if (folderMatch) {
+			const val = Number(folderMatch[1]);
+			const matching = versions.filter((v) => v.value === val);
+			if (matching.length) return matching[matching.length - 1];
+		}
+		return null;
+	}
+
 	async function inspect(dir: string) {
 		error = "";
 		try {
 			files = await ProjectService.Inspect(dir);
 			features = { ...files.features };
-			if (!otbChosen) otbPath = files.otbPath;
-			if (files.detected) versionKey = keyOfVersion(files.detected);
-			else
+			if (!otbChosen) {
+				if (files.otbPath) {
+					otbPath = files.otbPath;
+				} else if (!other && workspace.otbValid && workspace.effectiveOtbPath) {
+					otbPath = workspace.effectiveOtbPath;
+					otbChosen = true;
+				}
+			}
+			if (files.detected) {
+				versionKey = keyOfVersion(files.detected);
+			} else {
+				const guessed = guessVersionFromFiles(files);
+				if (guessed) {
+					versionKey = keyOfVersion(guessed);
+					if (!files.hasOtfi) {
+						features = {
+							...features,
+							extended: features.extended || guessed.value >= 960,
+							improvedAnimations: features.improvedAnimations || guessed.value >= 1050,
+							frameGroups: features.frameGroups || guessed.value >= 1057,
+						};
+					}
+				}
 				error = `Unknown signatures (dat ${hex(files.datSignature)}, spr ${hex(files.sprSignature)}). Choose the version manually.`;
+			}
 		} catch (err) {
 			files = null;
 			error = errorMessage(err);
@@ -142,6 +181,22 @@
 			other ? CompareService.Open(request) : ProjectService.Open(request),
 		);
 		if (opened?.open) {
+			if (!other) {
+				const server = workspace.inspection?.server;
+				if (server && server.state === ResourceState.ResourceFound) {
+					const xmlPath = server.itemsXml.state === ResourceState.ResourceFound ? server.itemsXml.path : "";
+					const serverDir = server.serverDir || server.root;
+					if (xmlPath || serverDir) {
+						await MapService.SetData({
+							xmlPath,
+							materialsPath: map.data?.config.materialsPath ?? "",
+							serverDir,
+						}).catch(() => {});
+					}
+				}
+				app.showWorkspace = false;
+				void loadMapData(true);
+			}
 			close();
 			openedNote(opened);
 			toast(

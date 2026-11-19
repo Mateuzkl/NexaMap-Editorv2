@@ -83,6 +83,14 @@ func main() {
 	settingsService.ApplyMCP = agents.Apply
 	applyRuntime := func(cfg settings.Settings) {
 		workpool.SetWorkers(cfg.WorkerThreads)
+		switch cfg.PerformanceMode {
+		case "low-end":
+			debug.SetGCPercent(35)
+		case "high":
+			debug.SetGCPercent(100)
+		default:
+			debug.SetGCPercent(50)
+		}
 		if err := debugService.SetLogFile(cfg.WriteDebugLog); err != nil {
 			log.Printf("diagnostic log: %v", err)
 		}

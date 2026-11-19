@@ -90,19 +90,22 @@ type Settings struct {
 	UIScale          int                `json:"uiScale,omitempty"`
 	SidebarCollapsed bool               `json:"sidebarCollapsed,omitempty"`
 	WriteDebugLog    bool               `json:"writeDebugLog,omitempty"`
+	PerformanceMode  string             `json:"performanceMode,omitempty"`
 	WorkerThreads    int                `json:"workerThreads,omitempty"`
 	UndoQueueSize    int                `json:"undoQueueSize,omitempty"`
 	UndoMaxMemoryMB  int                `json:"undoMaxMemoryMb,omitempty"`
+	ReplaceCount     int                `json:"replaceCount,omitempty"`
 	Workspaces       []WorkspaceProfile `json:"workspaces"`
 	ActiveWorkspace  string             `json:"activeWorkspaceId,omitempty"`
 }
 
 const (
-	MinUIScale         = 80
-	MaxUIScale         = 160
-	DefaultUIScale     = 100
-	DefaultUndoQueue   = 16384
-	DefaultUndoMaxMB   = 4096
+	MinUIScale          = 80
+	MaxUIScale          = 160
+	DefaultUIScale      = 100
+	DefaultUndoQueue    = 16384
+	DefaultUndoMaxMB    = 4096
+	DefaultReplaceCount = 100000
 )
 
 const (
@@ -123,9 +126,11 @@ func Defaults() Settings {
 		MCPPort:         DefaultMCPPort,
 		UITheme:         ThemeModernDark,
 		UIScale:         DefaultUIScale,
+		PerformanceMode: "auto",
 		WorkerThreads:   0,
 		UndoQueueSize:   DefaultUndoQueue,
 		UndoMaxMemoryMB: DefaultUndoMaxMB,
+		ReplaceCount:    DefaultReplaceCount,
 		Recent:          []Recent{},
 		Workspaces:      []WorkspaceProfile{},
 		MarketShared:    map[string]string{},
@@ -155,6 +160,11 @@ func (s *Settings) normalize() {
 		s.UIScale = DefaultUIScale
 	}
 	s.UIScale = min(max(s.UIScale, MinUIScale), MaxUIScale)
+	switch s.PerformanceMode {
+	case "auto", "low-end", "high":
+	default:
+		s.PerformanceMode = "auto"
+	}
 	s.WorkerThreads = min(max(s.WorkerThreads, 0), 32)
 	if s.UndoQueueSize == 0 {
 		s.UndoQueueSize = DefaultUndoQueue
@@ -164,6 +174,10 @@ func (s *Settings) normalize() {
 		s.UndoMaxMemoryMB = DefaultUndoMaxMB
 	}
 	s.UndoMaxMemoryMB = min(max(s.UndoMaxMemoryMB, 128), 16384)
+	if s.ReplaceCount == 0 {
+		s.ReplaceCount = DefaultReplaceCount
+	}
+	s.ReplaceCount = min(max(s.ReplaceCount, 100), 1000000)
 	if s.ListColumns == 0 {
 		s.ListColumns = DefaultListColumns
 	}

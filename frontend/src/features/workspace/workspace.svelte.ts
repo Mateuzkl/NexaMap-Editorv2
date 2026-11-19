@@ -316,13 +316,15 @@ class WorkspaceStore {
 			}
 		}
 
-		// Determine whether we should attach the detected/selected items.otb.
+		// Determine whether we should attach or detach the detected/selected items.otb.
 		let otbToPass: string | null = null;
 		const desiredOtb = this.preferredItemIds === "client" ? "" : this.otbValid ? this.effectiveOtbPath : "";
 		const currentRememberedOtb =
 			files.otbPath || (alreadySameClient ? (app.project?.info.itemsOtb?.path ?? "") : "");
 
-		if (desiredOtb) {
+		if (this.preferredItemIds === "client" && currentRememberedOtb) {
+			otbToPass = "";
+		} else if (desiredOtb) {
 			if (currentRememberedOtb && !samePath(currentRememberedOtb, desiredOtb)) {
 				const ok = await ask({
 					title: "Change server items (items.otb)",
@@ -354,8 +356,12 @@ class WorkspaceStore {
 					`Loaded ${files.detected?.name ?? "client"}: ${state.info.counts.items - 99} items, ${state.info.counts.sprites} sprites.`,
 					"success",
 				);
-			} else if (otbToPass) {
-				await run("Attaching items.otb", () => ProjectService.AttachItemsOTB(otbToPass!));
+			} else if (otbToPass !== null) {
+				if (otbToPass === "") {
+					await run("Detaching items.otb", () => ProjectService.DetachItemsOTB());
+				} else {
+					await run("Attaching items.otb", () => ProjectService.AttachItemsOTB(otbToPass!));
+				}
 			}
 
 			// Apply server data (items.xml + serverDir) while preserving custom materialsPath.

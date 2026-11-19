@@ -10,6 +10,7 @@
 	import {
 		creatureOutfit,
 		isBrushActive,
+		loadMapData,
 		map,
 		namedBrush,
 		reloadPalette,
@@ -495,7 +496,13 @@
 	{#if loadingData}
 		<div class="m-body t-panel">
 			<div class="m-empty" role="status">
-				<span class="busy"><span class="t-spinner"></span>Loading items…</span>
+				{#if map.data?.error}
+					<span>{map.data.error}</span>
+					<button class="t-btn primary" onclick={() => loadMapData(true)}>Retry</button>
+					<button class="t-btn" onclick={() => (map.dialog = "data")}>Server data…</button>
+				{:else}
+					<span class="busy"><span class="t-spinner"></span>Loading items…</span>
+				{/if}
 			</div>
 		</div>
 	{:else if view === "terrain"}

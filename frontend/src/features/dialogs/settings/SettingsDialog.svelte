@@ -20,7 +20,7 @@
 				id: "general",
 				group: "Application",
 				label: "General",
-				words: "startup check for updates reopen last client recent clients clear list diagnostic log nexamap.log worker threads undo queue memory performance",
+				words: "startup check for updates reopen last client recent clients clear list diagnostic log nexamap.log worker threads undo queue memory performance replace count low end pc fast load",
 			},
 			{
 				id: "appearance",
@@ -86,6 +86,34 @@
 		await navigator.clipboard?.writeText(await SettingsService.MCPSetupCommand());
 		toast("Copied the command that connects Claude Code.");
 	}
+
+	function applyPerformancePreset(mode: string) {
+		if (mode === "low-end") {
+			void savePrefs({
+				performanceMode: "low-end",
+				workerThreads: 2,
+				undoQueueSize: 2048,
+				undoMaxMemoryMb: 1024,
+				replaceCount: 50000,
+			});
+		} else if (mode === "high") {
+			void savePrefs({
+				performanceMode: "high",
+				workerThreads: 0,
+				undoQueueSize: 16384,
+				undoMaxMemoryMb: 4096,
+				replaceCount: 100000,
+			});
+		} else {
+			void savePrefs({
+				performanceMode: "auto",
+				workerThreads: 0,
+				undoQueueSize: 16384,
+				undoMaxMemoryMb: 4096,
+				replaceCount: 100000,
+			});
+		}
+	}
 </script>
 
 <Dialog title="Settings" width={580} onclose={() => (app.dialog = null)}>
@@ -137,17 +165,19 @@
 				>
 
 				<h4>Performance &amp; History</h4>
-				<div class="row">
-					<NumberField
-						label="Worker threads"
-						value={settings.workerThreads ?? 0}
-						min={0}
-						max={32}
-						width={52}
-						onchange={(value) => savePrefs({ workerThreads: value })}
+				<label class="row">
+					<span class="t-label lbl">Performance profile</span>
+					<Select
+						grow
+						value={settings.performanceMode || "auto"}
+						options={[
+							{ value: "auto", label: "Balanced (Auto — all cores, 50% GC)" },
+							{ value: "low-end", label: "Low-End PC (Save RAM — 2 threads, 35% GC)" },
+							{ value: "high", label: "High Performance (Fastest Load — all cores, 100% GC)" },
+						]}
+						onchange={(value) => applyPerformancePreset(value)}
 					/>
-					<span class="t-label">(0 = Auto / all CPU cores)</span>
-				</div>
+				</label>
 				<div class="row">
 					<NumberField
 						label="Undo queue size"
@@ -158,12 +188,33 @@
 						onchange={(value) => savePrefs({ undoQueueSize: value })}
 					/>
 					<NumberField
-						label="Undo max memory (MB)"
+						label="Undo maximum memory size (MB)"
 						value={settings.undoMaxMemoryMb || 4096}
 						min={128}
 						max={16384}
 						width={66}
 						onchange={(value) => savePrefs({ undoMaxMemoryMb: value })}
+					/>
+				</div>
+				<div class="row">
+					<NumberField
+						label="Worker Threads"
+						value={settings.workerThreads ?? 0}
+						min={0}
+						max={32}
+						width={52}
+						onchange={(value) => savePrefs({ workerThreads: value })}
+					/>
+					<span class="t-label">(0 = Auto / all CPU cores)</span>
+				</div>
+				<div class="row">
+					<NumberField
+						label="Replace count"
+						value={settings.replaceCount || 100000}
+						min={100}
+						max={1000000}
+						width={74}
+						onchange={(value) => savePrefs({ replaceCount: value })}
 					/>
 				</div>
 

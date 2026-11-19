@@ -7,9 +7,11 @@ import (
 	"runtime/debug"
 	"slices"
 	"strings"
+	"sync/atomic"
 
 	"github.com/nekiro/ots-creator/internal/core/otitems"
 	"github.com/nekiro/ots-creator/internal/formats/otbnode"
+	"github.com/nekiro/ots-creator/internal/workpool"
 )
 
 var otbmIdentifiers = []string{"OTBM", "\x00\x00\x00\x00"}
@@ -57,6 +59,9 @@ func readOTBM(data []byte, items Items, format Format, customSizes map[byte]int,
 			return nil, nil, fmt.Errorf("%w: identifier %q", ErrNotOTBM, identifier)
 		}
 	}
+	if len(data) >= 1<<20 && workpool.Workers() > 1 {
+		return readOTBMParallel(data, items, format, customSizes, progress)
+	}
 	// The map data children (tile areas, towns, waypoints) are streamed: a
 	// whole node tree of a big map takes several times the file size. The
 	// reader is made from the header when the first child arrives.
@@ -103,6 +108,145 @@ func readOTBM(data []byte, items Items, format Format, customSizes map[byte]int,
 	for _, chunk := range r.gameMap.chunks {
 		chunk.clip()
 	}
+	for problem, count := range r.warned {
+		r.warnings = append(r.warnings, fmt.Sprintf("%d more not listed: %s", count, problem))
+	}
+	return r.gameMap, r.warnings, nil
+}
+
+func readOTBMParallel(data []byte, items Items, format Format, customSizes map[byte]int, progress Progress) (*Map, []string, error) {
+	root, mapData, _, spans, err := otbnode.SplitDepth2(data)
+	if err != nil {
+		if errors.Is(err, ErrNotOTBM) {
+			return nil, nil, err
+		}
+		return nil, nil, fmt.Errorf("%w: %v", ErrNotOTBM, err)
+	}
+	r, err := newReader(root, mapData, items, format, customSizes)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var areaSpans []otbnode.ChildSpan
+	var otherSpans []otbnode.ChildSpan
+	for _, sp := range spans {
+		if sp.Type == nodeTileArea {
+			areaSpans = append(areaSpans, sp)
+		} else {
+			otherSpans = append(otherSpans, sp)
+		}
+	}
+
+	if len(areaSpans) > 0 {
+		workers := min(len(areaSpans), workpool.Workers())
+		workerReaders := make([]*reader, workers)
+		totalBytes := len(data)
+		var processedBytes atomic.Int64
+		var nextReport atomic.Int64
+		nextReport.Store(1 << 20)
+
+		err = workpool.Run(workers, func(w int) error {
+			startIdx := (w * len(areaSpans)) / workers
+			endIdx := ((w + 1) * len(areaSpans)) / workers
+			wr := &reader{
+				gameMap:     New(r.gameMap.Width, r.gameMap.Height),
+				items:       items,
+				format:      format,
+				customSizes: customSizes,
+				version:     r.version,
+				warned:      map[string]int{},
+			}
+			pool := &otbnode.NodePool{}
+			for i := startIdx; i < endIdx; i++ {
+				sp := areaSpans[i]
+				node, err := otbnode.ParseSpan(data[sp.Start:sp.End], pool)
+				if err != nil {
+					return err
+				}
+				wr.area(node)
+				if progress != nil {
+					done := processedBytes.Add(int64(sp.End - sp.Start))
+					target := nextReport.Load()
+					if done >= target && nextReport.CompareAndSwap(target, done+(1<<20)) {
+						progress(StageTiles, min(int(done), totalBytes), totalBytes)
+					}
+				}
+			}
+			for _, chunk := range wr.gameMap.chunks {
+				chunk.clip()
+			}
+			workerReaders[w] = wr
+			return nil
+		})
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: %v", ErrNotOTBM, err)
+		}
+
+		// Pre-size target chunk map for fast O(1) merge.
+		totalChunks := 0
+		for _, wr := range workerReaders {
+			totalChunks += len(wr.gameMap.chunks)
+		}
+		if len(r.gameMap.chunks) == 0 && totalChunks > 0 {
+			r.gameMap.chunks = make(map[ChunkKey]*Chunk, totalChunks)
+		}
+
+		for _, wr := range workerReaders {
+			for key, wChunk := range wr.gameMap.chunks {
+				if r.gameMap.chunks[key] == nil {
+					r.gameMap.chunks[key] = wChunk
+					r.gameMap.tiles += wChunk.Count
+					r.gameMap.floors[wChunk.Z] += wChunk.Count
+					r.gameMap.Rev++
+					wChunk.Rev = r.gameMap.Rev
+				} else {
+					wChunk.Each(func(pos Position, tile *Tile) {
+						if r.gameMap.Has(pos) {
+							r.warn("duplicate tile at %d,%d,%d discarded", pos.X, pos.Y, pos.Z)
+							return
+						}
+						if packable(tile) {
+							r.gameMap.SetTile(pos, tile)
+						} else {
+							cp := *tile
+							if len(tile.Items) > 0 {
+								cp.Items = slices.Clone(tile.Items)
+							}
+							r.gameMap.SetTile(pos, &cp)
+						}
+					})
+				}
+			}
+			for id, h := range wr.gameMap.Houses {
+				if _, ok := r.gameMap.Houses[id]; !ok {
+					r.gameMap.Houses[id] = h
+				}
+			}
+			for _, msg := range wr.warnings {
+				r.warn("%s", msg)
+			}
+			for problem, count := range wr.warned {
+				r.warned[problem] += count
+			}
+		}
+	}
+
+	pool := &otbnode.NodePool{}
+	for _, sp := range otherSpans {
+		node, err := otbnode.ParseSpan(data[sp.Start:sp.End], pool)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: %v", ErrNotOTBM, err)
+		}
+		switch node.Type {
+		case nodeTowns:
+			r.towns(node)
+		case nodeWaypoints:
+			r.waypoints(node)
+		default:
+			r.warn("unknown map node type %d", node.Type)
+		}
+	}
+
 	for problem, count := range r.warned {
 		r.warnings = append(r.warnings, fmt.Sprintf("%d more not listed: %s", count, problem))
 	}

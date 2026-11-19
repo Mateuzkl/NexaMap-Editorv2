@@ -48,7 +48,7 @@ func ParseProgress(data []byte, progress func(done, total int)) (root *Node, ide
 // streamed nodes). Nodes above depth are returned in root as usual.
 // Properties and nodes passed to visit are only valid during the call.
 func Stream(data []byte, depth int, progress func(done, total int), visit func(stack []*Node, node *Node) error) (root *Node, ident [4]byte, err error) {
-	return (&parser{progress: progress, depth: depth, visit: visit}).parse(data)
+	return (&parser{progress: progress, depth: depth, visit: visit, pool: &NodePool{}}).parse(data)
 }
 
 func (p *parser) parse(data []byte) (root *Node, ident [4]byte, err error) {
@@ -79,6 +79,183 @@ type parser struct {
 	stack []*Node
 	// nesting is how deep the node being read is, bounded by maxNesting.
 	nesting int
+	// pool holds reusable Node slabs when parsing streamed/single subtrees.
+	pool *NodePool
+}
+
+// NodePool reuses Node structs and property buffers across repeated ParseNode
+// calls (e.g. one per OTBM tile area on each worker goroutine), avoiding
+// millions of small heap allocations.
+type NodePool struct {
+	slabs   [][]Node
+	slabIdx int
+	nextIdx int
+	buf     []byte
+}
+
+const nodeSlabSize = 4096
+
+func (np *NodePool) Reset() {
+	np.slabIdx = 0
+	np.nextIdx = 0
+	np.buf = np.buf[:0]
+}
+
+func (np *NodePool) alloc(nodeType byte) *Node {
+	if np.slabIdx < len(np.slabs) && np.nextIdx >= len(np.slabs[np.slabIdx]) {
+		np.slabIdx++
+		np.nextIdx = 0
+	}
+	if np.slabIdx >= len(np.slabs) {
+		np.slabs = append(np.slabs, make([]Node, nodeSlabSize))
+	}
+	n := &np.slabs[np.slabIdx][np.nextIdx]
+	np.nextIdx++
+	n.Type = nodeType
+	n.Props = nil
+	n.Children = n.Children[:0]
+	return n
+}
+
+// ChildSpan locates one raw node slice [Start:End] (including leading 0xFE and
+// trailing 0xFF) inside an OTB/OTBM byte buffer.
+type ChildSpan struct {
+	Type  byte
+	Start int
+	End   int
+}
+
+// SplitDepth2 parses the root node (depth 0) and its first child (depth 1, e.g.
+// OTBM mapData) and returns the raw byte spans of every depth-2 child without
+// allocating a node tree for them. Callers can decode those spans in parallel
+// using ParseSpan.
+func SplitDepth2(data []byte) (root, mapData *Node, ident [4]byte, spans []ChildSpan, err error) {
+	if len(data) < 6 {
+		return nil, nil, ident, nil, fmt.Errorf("%w: file too small", ErrFormat)
+	}
+	copy(ident[:], data[:4])
+	pos := 4
+	if data[pos] != nodeStart {
+		return nil, nil, ident, nil, fmt.Errorf("%w: no root node", ErrFormat)
+	}
+	pos++
+	if pos >= len(data) {
+		return nil, nil, ident, nil, fmt.Errorf("%w: truncated node", ErrFormat)
+	}
+
+	readHeader := func() (*Node, byte, error) {
+		n := &Node{Type: data[pos]}
+		pos++
+		var props []byte
+		for pos < len(data) {
+			b := data[pos]
+			if b == nodeStart || b == nodeEnd {
+				n.Props = props
+				return n, b, nil
+			}
+			if b == escape {
+				if pos+1 >= len(data) {
+					return nil, 0, fmt.Errorf("%w: dangling escape", ErrFormat)
+				}
+				props = append(props, data[pos+1])
+				pos += 2
+				continue
+			}
+			runEnd := pos + 1
+			for runEnd < len(data) {
+				v := data[runEnd]
+				if v == nodeStart || v == nodeEnd || v == escape {
+					break
+				}
+				runEnd++
+			}
+			props = append(props, data[pos:runEnd]...)
+			pos = runEnd
+		}
+		return nil, 0, fmt.Errorf("%w: missing node end", ErrFormat)
+	}
+
+	var term byte
+	root, term, err = readHeader()
+	if err != nil {
+		return nil, nil, ident, nil, err
+	}
+	if term == nodeEnd {
+		return root, nil, ident, nil, nil
+	}
+	// Enter depth-1 child (nodeMapData).
+	pos++
+	if pos >= len(data) {
+		return nil, nil, ident, nil, fmt.Errorf("%w: truncated node", ErrFormat)
+	}
+	mapData, term, err = readHeader()
+	if err != nil {
+		return nil, nil, ident, nil, err
+	}
+	root.Children = []*Node{mapData}
+	if term == nodeEnd {
+		return root, mapData, ident, nil, nil
+	}
+
+	// Scan depth-2 child spans linearly with zero allocations per node.
+	spans = make([]ChildSpan, 0, max(64, len(data)/(32*1024)))
+	n := len(data)
+	for pos < n {
+		b := data[pos]
+		if b == nodeEnd {
+			return root, mapData, ident, spans, nil
+		}
+		if b != nodeStart {
+			if b == escape {
+				pos += 2
+			} else {
+				pos++
+			}
+			continue
+		}
+		start := pos
+		if pos+1 >= n {
+			return nil, nil, ident, nil, fmt.Errorf("%w: truncated node", ErrFormat)
+		}
+		childType := data[pos+1]
+		pos += 2
+		level := 1
+		for pos < n && level > 0 {
+			c := data[pos]
+			if c == escape {
+				if pos+1 >= n {
+					return nil, nil, ident, nil, fmt.Errorf("%w: dangling escape", ErrFormat)
+				}
+				pos += 2
+				continue
+			}
+			if c == nodeStart {
+				level++
+			} else if c == nodeEnd {
+				level--
+			}
+			pos++
+		}
+		if level != 0 {
+			return nil, nil, ident, nil, fmt.Errorf("%w: missing node end", ErrFormat)
+		}
+		spans = append(spans, ChildSpan{Type: childType, Start: start, End: pos})
+	}
+	return nil, nil, ident, nil, fmt.Errorf("%w: missing node end", ErrFormat)
+}
+
+// ParseSpan decodes a single raw node slice (starting with 0xFE and ending with
+// 0xFF) using pool so callers can decode depth-2 subtrees concurrently with
+// minimal allocations. The returned tree is valid until pool.Reset().
+func ParseSpan(raw []byte, pool *NodePool) (*Node, error) {
+	if len(raw) < 3 || raw[0] != nodeStart {
+		return nil, fmt.Errorf("%w: invalid span", ErrFormat)
+	}
+	pool.Reset()
+	p := parser{data: raw, pos: 1, buf: pool.buf, pool: pool}
+	node, err := p.node()
+	pool.buf = p.buf[:0]
+	return node, err
 }
 
 // maxNesting bounds nodes in nodes: real files stay far below it (a map
@@ -94,14 +271,18 @@ func (p *parser) node() (*Node, error) {
 		return nil, fmt.Errorf("%w: nodes nested too deep", ErrFormat)
 	}
 	p.nesting++
-	defer func() { p.nesting-- }()
-	node := &Node{Type: p.data[p.pos]}
+	var node *Node
+	if p.pool != nil && len(p.stack) >= p.depth {
+		node = p.pool.alloc(p.data[p.pos])
+	} else {
+		node = &Node{Type: p.data[p.pos]}
+	}
 	p.pos++
 	propsStart := len(p.buf)
 	streamChildren := p.visit != nil && len(p.stack)+1 == p.depth
-	if p.visit != nil {
+	pushedStack := p.visit != nil
+	if pushedStack {
 		p.stack = append(p.stack, node)
-		defer func() { p.stack = p.stack[:len(p.stack)-1] }()
 	}
 	childCount := 0
 	for p.pos < len(p.data) {
@@ -119,13 +300,24 @@ func (p *parser) node() (*Node, error) {
 			childStart := len(p.buf)
 			child, err := p.node()
 			if err != nil {
+				if pushedStack {
+					p.stack = p.stack[:len(p.stack)-1]
+				}
+				p.nesting--
 				return nil, err
 			}
 			if streamChildren {
 				if err := p.visit(p.stack, child); err != nil {
+					if pushedStack {
+						p.stack = p.stack[:len(p.stack)-1]
+					}
+					p.nesting--
 					return nil, err
 				}
 				p.buf = p.buf[:childStart]
+				if p.pool != nil {
+					p.pool.Reset()
+				}
 			} else {
 				node.Children = append(node.Children, child)
 			}
@@ -136,9 +328,17 @@ func (p *parser) node() (*Node, error) {
 				node.Props = p.buf[propsStart:len(p.buf):len(p.buf)]
 			}
 			p.pos++
+			if pushedStack {
+				p.stack = p.stack[:len(p.stack)-1]
+			}
+			p.nesting--
 			return node, nil
 		case escape:
 			if p.pos+1 >= len(p.data) {
+				if pushedStack {
+					p.stack = p.stack[:len(p.stack)-1]
+				}
+				p.nesting--
 				return nil, fmt.Errorf("%w: dangling escape", ErrFormat)
 			}
 			p.buf = append(p.buf, p.data[p.pos+1])
@@ -161,6 +361,10 @@ func (p *parser) node() (*Node, error) {
 			}
 		}
 	}
+	if pushedStack {
+		p.stack = p.stack[:len(p.stack)-1]
+	}
+	p.nesting--
 	return nil, fmt.Errorf("%w: missing node end", ErrFormat)
 }
 

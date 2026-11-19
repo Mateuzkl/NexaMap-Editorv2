@@ -27,9 +27,57 @@ var (
 	reNpcType     = regexp.MustCompile(`Game\.createNpcType\(\s*["']([^"']+)["']`)
 	reNpcVar      = regexp.MustCompile(`(?:internalNpcName|npcName)\s*=\s*["']([^"']+)["']`)
 	reNpcConfig   = regexp.MustCompile(`npcConfig\.name\s*=\s*["']([^"']+)["']`)
-	reOutfit      = regexp.MustCompile(`(?s)\.outfit\s*=\s*\{(.*?)\}`)
+	reTableName   = regexp.MustCompile(`(?m)^\s*(?:key|name)\s*=\s*["']([^"']+)["']`)
+	reOutfit      = regexp.MustCompile(`(?s)(?:\.outfit|\blook)\s*=\s*\{(.*?)\}`)
 	reKeyValue    = regexp.MustCompile(`(\w+)\s*=\s*(\d+)`)
 )
+
+var ignoredCreatureDirs = map[string]bool{
+	"node_modules":    true,
+	"vcpkg_installed": true,
+	"vcpkg":           true,
+	"build":           true,
+	"dist":            true,
+	"cmake":           true,
+	"src":             true,
+	"source":          true,
+	"sources":         true,
+	"obj":             true,
+	"bin":             true,
+	"cache":           true,
+	"backup":          true,
+	"backups":         true,
+	"world":           true,
+	"world-dbu":       true,
+	"logs":            true,
+	"log":             true,
+	"actions":         true,
+	"movements":       true,
+	"talkactions":     true,
+	"spells":          true,
+	"weapons":         true,
+	"creaturescripts": true,
+	"globalevents":    true,
+	"chatchannels":    true,
+	"events":          true,
+	"lib":             true,
+	"libs":            true,
+	"items":           true,
+	"migrations":      true,
+	"raids":           true,
+	"xml":             true,
+	"schemas":         true,
+	"modules":         true,
+	"mods":            true,
+	"layouts":         true,
+	"things":          true,
+	"assets":          true,
+	"android":         true,
+	"browser":         true,
+	"tools":           true,
+	"docs":            true,
+	"tests":           true,
+}
 
 // ScanCreatures finds monsters and NPCs in a server data folder: TFS XML
 // (monster/*.xml, npc/*.xml) and Lua scripts (revscripts). A registry
@@ -57,7 +105,7 @@ func ScanCreatures(dir string) ([]*CreatureType, error) {
 		}
 		if entry.IsDir() {
 			name := strings.ToLower(entry.Name())
-			if path != dir && (strings.HasPrefix(name, ".") || name == "node_modules" || name == "world" || name == "logs") {
+			if path != dir && (strings.HasPrefix(name, ".") || ignoredCreatureDirs[name]) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -170,6 +218,9 @@ func xmlCreature(data []byte) *CreatureType {
 }
 
 func luaCreatures(script string) []*CreatureType {
+	if !strings.Contains(script, "createMonsterType") && !strings.Contains(script, "createNpcType") && !strings.Contains(script, "npcConfig") {
+		return nil
+	}
 	var out []*CreatureType
 	outfit := func() Outfit {
 		var result Outfit
@@ -180,32 +231,38 @@ func luaCreatures(script string) []*CreatureType {
 		for _, pair := range reKeyValue.FindAllStringSubmatch(match[1], -1) {
 			value, _ := strconv.Atoi(pair[2])
 			switch strings.ToLower(pair[1]) {
-			case "looktype":
+			case "looktype", "type":
 				result.LookType = uint16(value)
-			case "lookhead":
+			case "lookhead", "head":
 				result.Head = uint8(value)
-			case "lookbody":
+			case "lookbody", "body":
 				result.Body = uint8(value)
-			case "looklegs":
+			case "looklegs", "legs":
 				result.Legs = uint8(value)
-			case "lookfeet":
+			case "lookfeet", "feet":
 				result.Feet = uint8(value)
-			case "lookaddons":
+			case "lookaddons", "addons":
 				result.Addons = uint8(value)
-			case "lookmount":
+			case "lookmount", "mount":
 				result.Mount = uint16(value)
-			case "looktypeex":
+			case "looktypeex", "typeex":
 				result.LookItem = uint16(value)
 			}
 		}
 		return result
 	}
-	if match := reMonsterType.FindStringSubmatch(script); match != nil {
-		out = append(out, &CreatureType{Name: match[1], Outfit: outfit()})
-		return out
+	if strings.Contains(script, "createMonsterType") {
+		if match := reMonsterType.FindStringSubmatch(script); match != nil {
+			out = append(out, &CreatureType{Name: match[1], Outfit: outfit()})
+			return out
+		}
+		if match := reTableName.FindStringSubmatch(script); match != nil {
+			out = append(out, &CreatureType{Name: match[1], Outfit: outfit()})
+			return out
+		}
 	}
 	name := ""
-	for _, pattern := range []*regexp.Regexp{reNpcType, reNpcVar, reNpcConfig} {
+	for _, pattern := range []*regexp.Regexp{reNpcType, reNpcVar, reNpcConfig, reTableName} {
 		if match := pattern.FindStringSubmatch(script); match != nil {
 			name = match[1]
 			break

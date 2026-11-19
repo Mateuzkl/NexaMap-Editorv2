@@ -248,15 +248,27 @@ func (m *Map) EachIn(minX, minY, maxX, maxY int, minZ, maxZ int, fn func(pos Pos
 func (m *Map) Bounds() (minX, minY, maxX, maxY int, ok bool) {
 	first := true
 	for _, chunk := range m.chunks {
-		chunk.Each(func(pos Position, _ *Tile) {
-			x, y := int(pos.X), int(pos.Y)
+		if chunk.Count == 0 {
+			continue
+		}
+		cx0 := int(chunk.X) << ChunkBits
+		cy0 := int(chunk.Y) << ChunkBits
+		if !first && cx0 >= minX && cx0+(ChunkSize-1) <= maxX && cy0 >= minY && cy0+(ChunkSize-1) <= maxY {
+			continue
+		}
+		for i, cell := range chunk.cells {
+			if cell == 0 {
+				continue
+			}
+			x := cx0 | (i & (ChunkSize - 1))
+			y := cy0 | (i >> ChunkBits)
 			if first {
 				minX, minY, maxX, maxY, first = x, y, x, y, false
-				return
+				continue
 			}
 			minX, minY = min(minX, x), min(minY, y)
 			maxX, maxY = max(maxX, x), max(maxY, y)
-		})
+		}
 	}
 	return minX, minY, maxX, maxY, !first
 }

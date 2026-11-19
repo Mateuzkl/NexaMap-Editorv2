@@ -262,8 +262,10 @@ export async function loadEditorPrefs(): Promise<void> {
 }
 
 let dataRequest = 0;
+let pendingForce = false;
 
 export async function loadMapData(force = false, activate = true): Promise<void> {
+	if (force) pendingForce = true;
 	const request = ++dataRequest;
 	try {
 		const status = await MapService.Status();
@@ -280,15 +282,31 @@ export async function loadMapData(force = false, activate = true): Promise<void>
 			map.palette = null;
 			return;
 		}
+		const prevData = map.data;
+		map.data = status.data;
+		const statusChanged =
+			!!prevData &&
+			(prevData.client !== status.data.client ||
+				prevData.mode !== status.data.mode ||
+				prevData.otbPath !== status.data.otbPath);
+		if (!pendingForce && !statusChanged && map.items && map.palette && id === null) {
+			return;
+		}
 		const view = await MapService.ViewData(id ?? 0, activate);
 		if (request !== dataRequest || id !== map.activeId) return;
-		// Another item id mode or items.otb means other items.
-		const modeChanged = !!map.data && (map.data.mode !== view.data.mode || map.data.otbPath !== view.data.otbPath);
+		// Another client, item id mode or items.otb means other items.
+		const modeChanged =
+			statusChanged ||
+			(!!prevData &&
+				(prevData.client !== view.data.client ||
+					prevData.mode !== view.data.mode ||
+					prevData.otbPath !== view.data.otbPath));
 		map.data = view.data;
-		if (force || !map.items || modeChanged) {
+		if (pendingForce || !map.items || !map.palette || modeChanged) {
 			map.items = new ItemIndex(view.items);
 			map.palette = view.palette;
 			map.dataRev++;
+			pendingForce = false;
 		}
 		if (modeChanged) {
 			map.brush = null;
@@ -298,7 +316,11 @@ export async function loadMapData(force = false, activate = true): Promise<void>
 			map.results = null;
 		}
 	} catch (err) {
-		if (request === dataRequest) toast(errorMessage(err), "error");
+		if (request === dataRequest) {
+			const msg = errorMessage(err);
+			map.data = { ...(map.data ?? ({} as DataInfo)), ready: false, error: msg };
+			toast(msg, "error");
+		}
 	}
 }
 

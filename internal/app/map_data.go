@@ -60,21 +60,20 @@ type mapData struct {
 	warnings  []string
 }
 
-type projectSource struct{ things map[uint32]*thing.Thing }
+type projectSource struct{ items []*thing.Thing }
 
 func (source projectSource) Thing(_ thing.Category, id uint32) (*thing.Thing, error) {
-	if found, ok := source.things[id]; ok {
-		return found, nil
+	minID := thing.CategoryItem.MinID()
+	if id >= minID && int(id-minID) < len(source.items) {
+		if found := source.items[id-minID]; found != nil {
+			return found, nil
+		}
 	}
 	return nil, errors.New("missing")
 }
 
 func clientItems(proj *project.Project) projectSource {
-	source := projectSource{things: map[uint32]*thing.Thing{}}
-	for _, item := range proj.ThingRange(thing.CategoryItem, thing.CategoryItem.MinID(), proj.Info().Counts.Items) {
-		source.things[item.ID] = item
-	}
-	return source
+	return projectSource{items: proj.ItemsSnapshot()}
 }
 
 func clientKey(proj *project.Project) string {
@@ -280,6 +279,20 @@ func (ms *MapService) activeMode() otitems.Mode {
 	return ms.serverMode()
 }
 
+// activeData returns the item data of activeMode(); when no map is open and
+// loading server ids (items.otb) fails, it falls back to client ids so the
+// map editor and library remain usable.
+func (ms *MapService) activeData() (*mapData, error) {
+	mode := ms.activeMode()
+	data, err := ms.dataOf(mode)
+	if err != nil && err != errNoClient && mode == otitems.ModeOTB && ms.maps[ms.activeID] == nil {
+		if fallback, fbErr := ms.dataOf(otitems.ModeClient); fbErr == nil {
+			return fallback, nil
+		}
+	}
+	return data, err
+}
+
 // reloadData reads the item data of every mode in use again (after the
 // client objects or the server data changed) and returns the active one.
 func (ms *MapService) reloadData() (DataInfo, error) {
@@ -314,6 +327,7 @@ func (ms *MapService) reloadData() (DataInfo, error) {
 
 type DataInfo struct {
 	Ready  bool          `json:"ready"`
+	Error  string        `json:"error,omitempty"`
 	Client string        `json:"client"`
 	Config MapDataConfig `json:"config"`
 	// Mode is the item id mode the data is for.
@@ -356,8 +370,10 @@ func (ms *MapService) Status() MapStatus {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	status := MapStatus{Recent: ms.store.Recent(), Settings: ms.store.EditorSettings(), Keys: ms.store.Keys()}
-	if data, err := ms.dataOf(ms.activeMode()); err == nil {
+	if data, err := ms.activeData(); err == nil {
 		status.Data = data.info()
+	} else if err != errNoClient {
+		status.Data.Error = err.Error()
 	}
 	ids := make([]int, 0, len(ms.maps))
 	for id := range ms.maps {

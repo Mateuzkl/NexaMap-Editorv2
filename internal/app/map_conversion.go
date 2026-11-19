@@ -29,15 +29,19 @@ type MapViewData struct {
 func (ms *MapService) ViewData(id int, activate bool) (view MapViewData, err error) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
-	mode := ms.serverMode()
+	var data *mapData
 	if id != 0 {
 		opened := ms.maps[id]
 		if opened == nil {
 			return view, ErrNoMap
 		}
-		mode = opened.editor.Items.Mode
+		data, err = ms.dataOf(opened.editor.Items.Mode)
+	} else {
+		if activate {
+			ms.activeID = 0
+		}
+		data, err = ms.activeData()
 	}
-	data, err := ms.dataOf(mode)
 	if err != nil {
 		return view, err
 	}
