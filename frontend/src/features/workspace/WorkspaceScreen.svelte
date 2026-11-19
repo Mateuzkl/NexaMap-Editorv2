@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import workspaceBg from "../../assets/workspace-bg.jpg";
 	import { commands } from "../../lib/commands";
 	import { loadMapData, map } from "../../lib/map/state.svelte";
 	import { mapCommands } from "../../lib/map/view/commands";
@@ -111,7 +112,7 @@
 			</div>
 		</header>
 
-		<div class="ws-scroll">
+		<div class="ws-scroll" style:--ws-bg-image={`url("${workspaceBg}")`}>
 			<div class="ws-container">
 				{#if workspace.activeSection === "workspace"}
 					<div class="ws-two-col">
@@ -308,6 +309,23 @@
 		overflow-y: auto;
 		overflow-x: hidden;
 		padding: 20px 26px 28px;
+	}
+	:global(:root[data-ui-theme="modern-dark"]) .ws-scroll {
+		background-color: #071018;
+		background-image: var(--ws-bg-image);
+		background-size: cover;
+		background-position: center bottom;
+		background-repeat: no-repeat;
+		padding: 20px 26px 96px;
+	}
+	:global(:root[data-ui-theme="modern-dark"]) .ws-scroll :global(.ws-card),
+	:global(:root[data-ui-theme="modern-dark"]) .ws-scroll :global(.ws-section),
+	:global(:root[data-ui-theme="modern-dark"]) .ws-scroll :global(.ws-overview),
+	:global(:root[data-ui-theme="modern-dark"]) .ws-scroll :global(.cc-card),
+	:global(:root[data-ui-theme="modern-dark"]) .ws-scroll .ws-tool-card,
+	:global(:root[data-ui-theme="modern-dark"]) .ws-scroll .ws-mp-card {
+		background: color-mix(in srgb, var(--ui-surface) 82%, transparent);
+		backdrop-filter: blur(10px);
 	}
 	.ws-container {
 		max-width: 1220px;
