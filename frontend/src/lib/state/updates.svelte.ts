@@ -4,7 +4,7 @@ import { Events, Updater } from "@wailsio/runtime";
 import { UpdateService, errorMessage, type UpdateInfo } from "../api";
 import { app, toast } from "./app.svelte";
 
-export const REPO_URL = "https://github.com/nekiro/ots-creator";
+export const REPO_URL = "https://github.com/Mateuzkl/NexaMap-Editorv2";
 
 export type UpdateStage = "idle" | "downloading" | "verifying" | "installing" | "restarting";
 

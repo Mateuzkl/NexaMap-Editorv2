@@ -50,9 +50,9 @@ const MCPCommand = "mcp"
 func (ss *SettingsService) MCPSetupCommand() string {
 	exe, err := os.Executable()
 	if err != nil {
-		exe = "otscreator"
+		exe = "nexamap-editor"
 	}
-	return `claude mcp add ots-creator -- "` + appImageOr(exe) + `" ` + MCPCommand
+	return `claude mcp add nexamap-editor -- "` + appImageOr(exe) + `" ` + MCPCommand
 }
 
 // appImageOr returns the AppImage file ($APPIMAGE) when exe runs from its
