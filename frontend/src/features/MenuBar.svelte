@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Browser, Window } from "@wailsio/runtime";
 	import { commands } from "../lib/commands";
+	import { debugConsole } from "../lib/debug/console.svelte";
 	import { checkForUpdates, REPO_URL, updates } from "../lib/state/updates.svelte";
 	import { getMode, SCALE_MODES, scaleFits, setMode } from "../lib/pixelscale";
 	import { app, openSettings } from "../lib/state/app.svelte";
@@ -298,6 +299,15 @@
 		</div>
 	{/if}
 	<div class="spacer"></div>
+	<button
+		type="button"
+		class="theme-switch console-btn"
+		class:on={debugConsole.open}
+		title="Toggle Debug Console & Memory Monitor (F12)"
+		onclick={() => debugConsole.toggle()}
+	>
+		Console{#if debugConsole.unreadErrors > 0}<span class="err-dot">{debugConsole.unreadErrors}</span>{/if}
+	</button>
 	<div class="zoom-ctl" role="group" aria-label="Interface zoom">
 		<button
 			type="button"
@@ -437,6 +447,24 @@
 	.theme-switch:hover {
 		color: var(--text-bright);
 		border-color: #666;
+	}
+	.console-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		margin-right: 4px;
+	}
+	.console-btn.on {
+		color: var(--text-bright);
+		border-color: var(--ui-primary, var(--gold));
+	}
+	.err-dot {
+		padding: 0 5px;
+		border-radius: 99px;
+		background: var(--ui-danger, #d33c3c);
+		color: #fff;
+		font-size: 10px;
+		font-weight: 700;
 	}
 	.menu {
 		position: relative;

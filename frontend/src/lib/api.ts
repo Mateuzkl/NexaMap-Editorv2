@@ -8,6 +8,7 @@ export * as ViewerService from "../../bindings/github.com/nekiro/ots-creator/int
 export * as SettingsService from "../../bindings/github.com/nekiro/ots-creator/internal/app/settingsservice";
 export * as WorkspaceService from "../../bindings/github.com/nekiro/ots-creator/internal/app/workspaceservice";
 export * as ConverterService from "../../bindings/github.com/nekiro/ots-creator/internal/app/converterservice";
+export * as DebugService from "../../bindings/github.com/nekiro/ots-creator/internal/app/debugservice";
 export * as MarketService from "../../bindings/github.com/nekiro/ots-creator/internal/app/marketservice";
 export * as CompareService from "../../bindings/github.com/nekiro/ots-creator/internal/app/compareservice";
 export type {
@@ -36,6 +37,8 @@ export type {
 	CustomServerAnalysis,
 	CustomServerRequest,
 	CustomServerReport,
+	DebugLogEntry,
+	RuntimeStats,
 } from "../../bindings/github.com/nekiro/ots-creator/internal/app/models";
 export { ResourceState } from "../../bindings/github.com/nekiro/ots-creator/internal/app/models";
 export type {

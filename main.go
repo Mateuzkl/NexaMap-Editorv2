@@ -31,6 +31,7 @@ func init() {
 	application.RegisterEvent[app.MapChanged](app.EventMapChanged)
 	application.RegisterEvent[app.CollabEvent](app.EventCollab)
 	application.RegisterEvent[app.PlayMove](app.EventPlayMove)
+	application.RegisterEvent[app.DebugLogEntry](app.EventDebugLog)
 	application.RegisterEvent[mcpserver.Event](mcpserver.EventMap)
 }
 
@@ -48,7 +49,16 @@ func main() {
 			wailsApp.Event.Emit(name, data)
 		}
 	}
-	app.Generator = "OTS Creator " + version
+	app.Generator = "NexaMap " + version
+	debugService := app.NewDebugService(emit)
+	log.SetOutput(debugService)
+	for _, arg := range os.Args[1:] {
+		if arg == "--console" || arg == "-console" {
+			_, _ = debugService.ToggleNativeConsole(true)
+			break
+		}
+	}
+	debugService.Log("info", "startup", "NexaMap started (version "+version+", Go GC=50%)")
 	session := app.NewSession(emit)
 	prefs := openSettings(session)
 	resources := app.NewResources(session)
@@ -91,6 +101,7 @@ func main() {
 			application.NewService(settingsService),
 			application.NewService(app.NewWorkspaceService(session, prefs)),
 			application.NewService(app.NewConverterService()),
+			application.NewService(debugService),
 			application.NewService(app.NewMarketService(session, prefs)),
 			application.NewService(maps),
 			application.NewService(collabService),
@@ -161,8 +172,12 @@ func main() {
 	})
 
 	// Open a client passed on the command line (file association, dev runs).
-	if len(os.Args) > 1 {
-		openClient(projects, commandLinePath(os.Args[1]))
+	for _, arg := range os.Args[1:] {
+		if arg == "--console" || arg == "-console" {
+			continue
+		}
+		openClient(projects, commandLinePath(arg))
+		break
 	}
 
 	if err := wailsApp.Run(); err != nil {

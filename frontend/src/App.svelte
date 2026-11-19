@@ -33,8 +33,10 @@
 	import WorkspaceScreen from "./features/workspace/WorkspaceScreen.svelte";
 	import SpriteList from "./features/SpriteList.svelte";
 	import StatusBar from "./features/StatusBar.svelte";
+	import DebugConsole from "./features/DebugConsole.svelte";
 	import ThingList from "./features/ThingList.svelte";
 	import { commands, handlePaste, handleShortcut } from "./lib/commands";
+	import { debugConsole, initDebugConsole } from "./lib/debug/console.svelte";
 	import { followAgents } from "./lib/map/agents";
 	import { followCollab } from "./lib/map/collab.svelte";
 	import { app, initState } from "./lib/state/app.svelte";
@@ -54,6 +56,11 @@
 
 	// In the map editor only map shortcuts apply (Ctrl+S saves the map, not the client).
 	function onkeydown(event: KeyboardEvent) {
+		if (event.key === "F12") {
+			event.preventDefault();
+			debugConsole.toggle();
+			return;
+		}
 		if (map.mode === "map") {
 			// The play view takes the keys itself.
 			if (!app.dialog && !map.dialog && !map.play) mapShortcut(event);
@@ -131,11 +138,13 @@
 		);
 		const offAgents = followAgents();
 		const offCollab = followCollab();
+		const offDebug = initDebugConsole();
 		return () => {
 			offClose();
 			offDrop();
 			offAgents();
 			offCollab();
+			offDebug();
 		};
 	});
 
@@ -187,6 +196,7 @@
 			</div>
 		</main>
 	{/if}
+	<DebugConsole />
 	<StatusBar {mapHover} />
 </div>
 

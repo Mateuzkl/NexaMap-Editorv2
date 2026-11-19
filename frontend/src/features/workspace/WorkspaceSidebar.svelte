@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { commands } from "../../lib/commands";
+	import { debugConsole } from "../../lib/debug/console.svelte";
 	import { map } from "../../lib/map/state.svelte";
 	import { mapCommands } from "../../lib/map/view/commands";
 	import { app, openSettings, toast } from "../../lib/state/app.svelte";
@@ -144,6 +145,17 @@
 		<button type="button" class="ws-nav-item" title="Market" onclick={() => commands.market()}>
 			<span class="ws-nav-icon" aria-hidden="true">★</span>
 			{#if !collapsed}<span class="ws-nav-label">Market</span>{/if}
+		</button>
+
+		<button
+			type="button"
+			class="ws-nav-item"
+			class:active={debugConsole.open}
+			title="Debug Console & Memory Monitor (F12)"
+			onclick={() => debugConsole.toggle()}
+		>
+			<span class="ws-nav-icon" aria-hidden="true">⌘</span>
+			{#if !collapsed}<span class="ws-nav-label">Debug Console</span>{/if}
 		</button>
 
 		<button type="button" class="ws-nav-item" title="Preferences" onclick={() => openSettings("appearance")}>
