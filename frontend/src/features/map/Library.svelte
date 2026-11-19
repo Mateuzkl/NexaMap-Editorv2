@@ -152,7 +152,7 @@
 		if (!itemIndex || itemKind === "all") return baseItems;
 		return baseItems.filter((id) => {
 			const ground = itemIndex.is(id, "ground");
-			const edge = !ground && itemIndex.top[id] > 0;
+			const edge = !ground && itemIndex.topOf(id) > 0;
 			switch (itemKind) {
 				case "ground":
 					return ground;
@@ -172,7 +172,7 @@
 		const itemIndex = map.items;
 		if (!itemIndex) return "other";
 		if (itemIndex.is(id, "ground")) return "ground";
-		if (itemIndex.top[id] > 0) return "edge";
+		if (itemIndex.topOf(id) > 0) return "edge";
 		if (itemIndex.is(id, "container")) return "container";
 		if (itemIndex.is(id, "pickupable")) return "pickup";
 		return "other";

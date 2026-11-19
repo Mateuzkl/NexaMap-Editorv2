@@ -10,7 +10,7 @@ import (
 
 type TileItem struct {
 	ID        uint16         `json:"id"`
-	ClientID  uint16         `json:"clientId"`
+	ClientID  uint32         `json:"clientId"`
 	Name      string         `json:"name"`
 	Subtype   uint16         `json:"subtype"`
 	Selected  bool           `json:"selected"`
@@ -20,7 +20,7 @@ type TileItem struct {
 	TopOrder  uint8          `json:"topOrder"`
 	Brush     string         `json:"brush"`
 	BrushKind string         `json:"brushKind"`
-	RotateTo  uint16         `json:"rotateTo"`
+	RotateTo  uint32         `json:"rotateTo"`
 	Contents  []TileItem     `json:"contents"`
 }
 
@@ -53,8 +53,8 @@ const kindInvalid = "invalid"
 func (data *mapData) tileItem(item otmap.Item) TileItem {
 	tileItem := TileItem{ID: item.ID, Subtype: item.Subtype, Selected: item.Selected, Ext: item.Ext}
 	if itemType := data.items.Get(item.ID); itemType != nil {
-		tileItem.ClientID, tileItem.Name, tileItem.Flags = itemType.ClientID, itemType.DisplayName(), itemType.Flags
-		tileItem.TopOrder, tileItem.RotateTo, tileItem.Kind = itemType.TopOrder, itemType.RotateTo, itemType.KindName()
+		tileItem.ClientID, tileItem.Name, tileItem.Flags = itemType.EffectiveClientID(), itemType.DisplayName(), itemType.Flags
+		tileItem.TopOrder, tileItem.RotateTo, tileItem.Kind = itemType.TopOrder, itemType.EffectiveRotateTo(), itemType.KindName()
 	} else {
 		tileItem.Name = fmt.Sprintf("unknown item %d", item.ID)
 		tileItem.Kind = kindInvalid

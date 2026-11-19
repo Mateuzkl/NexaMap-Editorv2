@@ -6,8 +6,8 @@ import (
 )
 
 type ItemTable struct {
-	IDs     []uint16 `json:"ids"`
-	Clients []uint16 `json:"clients"`
+	IDs     []uint32 `json:"ids"`
+	Clients []uint32 `json:"clients"`
 	Flags   []uint32 `json:"flags"`
 	Tops    []uint16 `json:"tops"`
 	Minimap []uint16 `json:"minimap"`
@@ -16,7 +16,7 @@ type ItemTable struct {
 	// Speeds are the ground speeds (0: not a ground or no speed).
 	Speeds   []uint16          `json:"speeds"`
 	Mode     string            `json:"mode"`
-	MaxID    uint16            `json:"maxId"`
+	MaxID    uint32            `json:"maxId"`
 	Flagbits map[string]uint32 `json:"flagbits"`
 }
 
@@ -29,13 +29,13 @@ func (ms *MapService) Items() (table ItemTable, err error) {
 }
 
 func itemTable(items *otitems.DB) ItemTable {
-	table := ItemTable{Mode: string(items.Mode), MaxID: items.MaxID(), Flagbits: map[string]uint32{}}
+	table := ItemTable{Mode: string(items.Mode), MaxID: items.MaxID32(), Flagbits: map[string]uint32{}}
 	for name, flag := range otitems.FlagNames() {
 		table.Flagbits[name] = uint32(flag)
 	}
 	items.Each(func(item *otitems.Type) {
-		table.IDs = append(table.IDs, item.ID)
-		table.Clients = append(table.Clients, item.ClientID)
+		table.IDs = append(table.IDs, item.EffectiveID())
+		table.Clients = append(table.Clients, item.EffectiveClientID())
 		table.Flags = append(table.Flags, uint32(item.Flags))
 		table.Tops = append(table.Tops, uint16(item.TopOrder))
 		table.Minimap = append(table.Minimap, item.MinimapColor)

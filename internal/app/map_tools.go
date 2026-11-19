@@ -3,7 +3,9 @@ package app
 import (
 	"errors"
 	"fmt"
+	"slices"
 
+	"github.com/nekiro/ots-creator/internal/core/otitems"
 	"github.com/nekiro/ots-creator/internal/mapping/mapedit"
 	"github.com/nekiro/ots-creator/internal/mapping/otmap"
 )
@@ -59,7 +61,38 @@ type FindResult struct {
 }
 
 func (ms *MapService) Find(id int, query mapedit.FindQuery) (found FindResult, err error) {
-	err = ms.withMapRead(id, func(opened *openMap, _ *mapData) error {
+	err = ms.withMapRead(id, func(opened *openMap, data *mapData) error {
+		if query.SpriteID != 0 {
+			clientIDs := map[uint32]bool{}
+			if data.project != nil {
+				for _, t := range data.project.ItemsSnapshot() {
+					if t == nil {
+						continue
+					}
+					for _, g := range t.FrameGroups {
+						if g != nil && slices.Contains(g.Sprites, query.SpriteID) {
+							clientIDs[t.ID] = true
+							break
+						}
+					}
+				}
+			}
+			if len(clientIDs) == 0 || data.items == nil {
+				found.Results = []mapedit.FindResult{}
+				return nil
+			}
+			var serverIDs []uint16
+			data.items.Each(func(it *otitems.Type) {
+				if it.EffectiveID() <= 0xFFFF && clientIDs[it.EffectiveClientID()] {
+					serverIDs = append(serverIDs, uint16(it.EffectiveID()))
+				}
+			})
+			if len(serverIDs) == 0 {
+				found.Results = []mapedit.FindResult{}
+				return nil
+			}
+			query.IDs = serverIDs
+		}
 		found.Results, found.More = opened.editor.Find(query)
 		return nil
 	})

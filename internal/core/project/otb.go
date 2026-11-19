@@ -31,8 +31,8 @@ func newItemsOTB(path string, file *itemsotb.File, data []byte) *itemsOTB {
 	major, minor, build := file.Version()
 	otb.info = OTBInfo{Path: path, Version: fmt.Sprintf("%d.%d.%d", major, minor, build), Items: len(file.Items)}
 	for _, item := range file.Items {
-		otb.info.MaxServerID = max(otb.info.MaxServerID, item.ServerID())
-		otb.info.MaxClientID = max(otb.info.MaxClientID, item.ClientID())
+		otb.info.MaxServerID = max(otb.info.MaxServerID, item.ServerID32())
+		otb.info.MaxClientID = max(otb.info.MaxClientID, item.ClientID32())
 	}
 	return otb
 }
@@ -44,8 +44,8 @@ type OTBInfo struct {
 	// Items is the number of server items, MaxServerID and MaxClientID the
 	// highest ids they use.
 	Items       int    `json:"items"`
-	MaxServerID uint16 `json:"maxServerId"`
-	MaxClientID uint16 `json:"maxClientId"`
+	MaxServerID uint32 `json:"maxServerId"`
+	MaxClientID uint32 `json:"maxClientId"`
 }
 
 type OTBReport struct {
@@ -187,9 +187,12 @@ func (p *Project) otbSpriteHash() bool {
 	return p.format == FormatDat && p.sprites.size == itemsotb.SpriteSize
 }
 
-// maxServerID is the highest server id an items.otb can hold. Client ids
-// are 16 bit there too.
-const maxServerID = 0xFFFF
+// maxServerID is the highest server id a standard 16-bit items.otb can hold;
+// 32-bit extended-items clients support up to maxServerID32.
+const (
+	maxServerID   = 0xFFFF
+	maxServerID32 = 0xFFFFFFFF
+)
 
 type otbSync struct {
 	project *Project
@@ -198,6 +201,13 @@ type otbSync struct {
 	onDisk  map[uint32]uint32
 	changed map[uint32]bool
 	hashes  map[uint32]*[16]byte
+}
+
+func (s *otbSync) idLimit(maxServer uint32) uint32 {
+	if s.project.features.ExtendedItems || maxServer > maxServerID {
+		return maxServerID32
+	}
+	return maxServerID
 }
 
 // syncOTB returns a copy of the attached items.otb brought in line with the
@@ -221,11 +231,11 @@ func (p *Project) syncOTB() (*itemsotb.File, OTBReport, error) {
 // updateItems copies items into synced, remapping the server items whose
 // client item moved and reloading the ones whose client data changed. It
 // returns the highest server id and the highest mapped client id.
-func (s *otbSync) updateItems(items, synced []*itemsotb.Item) (maxServer, maxClient uint16, err error) {
+func (s *otbSync) updateItems(items, synced []*itemsotb.Item) (maxServer, maxClient uint32, err error) {
 	for i, item := range items {
 		synced[i] = item
-		maxServer = max(maxServer, item.ServerID())
-		clientID := uint32(item.ClientID())
+		maxServer = max(maxServer, item.ServerID32())
+		clientID := item.ClientID32()
 		if item.Deprecated() || clientID == 0 {
 			continue
 		}
@@ -233,11 +243,11 @@ func (s *otbSync) updateItems(items, synced []*itemsotb.Item) (maxServer, maxCli
 		if movedTo, ok := s.project.moves[clientID]; ok {
 			currentID = movedTo
 		}
-		if currentID > maxServerID {
+		if currentID > s.idLimit(maxServer) {
 			s.report.Missing++
 			continue
 		}
-		maxClient = max(maxClient, uint16(currentID))
+		maxClient = max(maxClient, currentID)
 		object := s.project.things.Get(thing.CategoryItem, currentID)
 		if object == nil {
 			s.report.Missing++
@@ -249,7 +259,7 @@ func (s *otbSync) updateItems(items, synced []*itemsotb.Item) (maxServer, maxCli
 		}
 		updated := item.Clone()
 		if moved {
-			updated.SetClientID(uint16(currentID))
+			updated.SetClientID32(currentID)
 			s.report.Remapped++
 		}
 		if err := s.reload(updated, object); err != nil {
@@ -268,10 +278,11 @@ func (s *otbSync) updateItems(items, synced []*itemsotb.Item) (maxServer, maxCli
 
 // appendItems adds new server items for the client items past the last
 // mapped one.
-func (s *otbSync) appendItems(items []*itemsotb.Item, maxServer, maxClient uint16) ([]*itemsotb.Item, error) {
+func (s *otbSync) appendItems(items []*itemsotb.Item, maxServer, maxClient uint32) ([]*itemsotb.Item, error) {
 	last := s.project.things.MaxID(thing.CategoryItem)
-	for id := uint32(maxClient) + 1; id <= last && id <= maxServerID; id++ {
-		if maxServer == maxServerID {
+	limit := s.idLimit(maxServer)
+	for id := maxClient + 1; id >= maxClient+1 && id <= last && id <= limit; id++ {
+		if maxServer == limit {
 			return nil, fmt.Errorf("items.otb has no free server id for client item %d", id)
 		}
 		object := s.project.things.Get(thing.CategoryItem, id)
@@ -279,7 +290,7 @@ func (s *otbSync) appendItems(items []*itemsotb.Item, maxServer, maxClient uint1
 			continue
 		}
 		maxServer++
-		item := itemsotb.NewItem(maxServer, uint16(id))
+		item := itemsotb.NewItem32(maxServer, id)
 		if err := s.reload(item, object); err != nil {
 			return nil, err
 		}

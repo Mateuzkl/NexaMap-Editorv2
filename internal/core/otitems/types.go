@@ -89,13 +89,15 @@ const (
 func (f Flags) Has(flags Flags) bool { return f&flags == flags }
 
 type Type struct {
-	ID       uint16 `json:"id"`
-	ClientID uint16 `json:"clientId"`
-	Name     string `json:"name"`
-	Article  string `json:"article,omitempty"`
-	Plural   string `json:"plural,omitempty"`
-	Group    Group  `json:"group"`
-	Kind     Kind   `json:"kind"`
+	ID         uint16 `json:"id"`
+	ClientID   uint16 `json:"clientId"`
+	ID32       uint32 `json:"id32,omitempty"`
+	ClientID32 uint32 `json:"clientId32,omitempty"`
+	Name       string `json:"name"`
+	Article    string `json:"article,omitempty"`
+	Plural     string `json:"plural,omitempty"`
+	Group      Group  `json:"group"`
+	Kind       Kind   `json:"kind"`
 	// TopOrder is 1 for borders, 2 for bottom items (walls) and 3 for top
 	// items (always drawn above creatures); 0 for common items.
 	TopOrder     uint8  `json:"topOrder"`
@@ -103,10 +105,32 @@ type Type struct {
 	MinimapColor uint16 `json:"minimapColor"`
 	Speed        uint16 `json:"speed"`
 	RotateTo     uint16 `json:"rotateTo,omitempty"`
+	RotateTo32   uint32 `json:"rotateTo32,omitempty"`
 	MaxItems     uint16 `json:"maxItems,omitempty"`
 	LightLevel   uint8  `json:"lightLevel,omitempty"`
 	LightColor   uint8  `json:"lightColor,omitempty"`
 	EditorSuffix string `json:"editorSuffix,omitempty"`
+}
+
+func (t *Type) EffectiveID() uint32 {
+	if t.ID32 != 0 {
+		return t.ID32
+	}
+	return uint32(t.ID)
+}
+
+func (t *Type) EffectiveClientID() uint32 {
+	if t.ClientID32 != 0 {
+		return t.ClientID32
+	}
+	return uint32(t.ClientID)
+}
+
+func (t *Type) EffectiveRotateTo() uint32 {
+	if t.RotateTo32 != 0 {
+		return t.RotateTo32
+	}
+	return uint32(t.RotateTo)
 }
 
 func (t *Type) IsGround() bool { return t.Flags.Has(FlagGround) }

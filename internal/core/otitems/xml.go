@@ -54,14 +54,10 @@ func (db *DB) ApplyXML(data []byte) error {
 				return fmt.Errorf("items.xml: %w", err)
 			}
 			from, to := parseRange(node.ID, node.FromID, node.ToID)
-			for id := from; id <= to && id != 0; id++ {
-				itemType := db.Get(uint16(id))
-				if itemType == nil {
-					if id == to {
-						break
-					}
-					continue
-				}
+			if from == 0 {
+				continue
+			}
+			applyNode := func(itemType *Type) {
 				if node.Name != "" {
 					itemType.Name = node.Name
 				}
@@ -77,8 +73,22 @@ func (db *DB) ApplyXML(data []byte) error {
 				for _, attr := range node.Attrs {
 					applyXMLAttr(itemType, strings.ToLower(attr.Key), attr.Value)
 				}
-				if id == to {
-					break
+			}
+			if to-from > denseLimit {
+				db.Each(func(itemType *Type) {
+					id := itemType.EffectiveID()
+					if id >= from && id <= to {
+						applyNode(itemType)
+					}
+				})
+			} else {
+				for id := from; id <= to; id++ {
+					if itemType := db.Get32(id); itemType != nil {
+						applyNode(itemType)
+					}
+					if id == to {
+						break
+					}
 				}
 			}
 		}
@@ -91,7 +101,7 @@ func (db *DB) ApplyXML(data []byte) error {
 
 func parseRange(id, from, to string) (uint32, uint32) {
 	parse := func(text string) uint32 {
-		number, _ := strconv.ParseUint(strings.TrimSpace(text), 10, 16)
+		number, _ := strconv.ParseUint(strings.TrimSpace(text), 10, 32)
 		return uint32(number)
 	}
 	if id != "" {
@@ -115,8 +125,11 @@ func applyXMLAttr(itemType *Type, key, value string) {
 			}
 		}
 	case "rotateto":
-		rotateTo, _ := strconv.ParseUint(value, 10, 16)
-		itemType.RotateTo = uint16(rotateTo)
+		rotateTo, _ := strconv.ParseUint(value, 10, 32)
+		itemType.RotateTo32 = uint32(rotateTo)
+		if rotateTo <= 0xFFFF {
+			itemType.RotateTo = uint16(rotateTo)
+		}
 	case "containersize":
 		size, _ := strconv.ParseUint(value, 10, 16)
 		itemType.MaxItems = uint16(size)

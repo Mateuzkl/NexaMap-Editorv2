@@ -108,6 +108,9 @@ func Open(options OpenOptions) (*Project, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", filepath.Base(options.DatPath), err)
 	}
+	if things.ExtendedItems {
+		features.ExtendedItems = true
+	}
 	spriteFile, err := spr.Open(sprBytes, spr.Options{Extended: features.Extended, Transparent: features.Transparency, SpriteSize: features.SpriteSize})
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", filepath.Base(options.SprPath), err)
@@ -231,6 +234,9 @@ func (p *Project) Compile(options CompileOptions) error {
 	}
 	features := options.Features
 	features.ApplyVersionDefaults(options.Version.Value)
+	if p.things.MaxID(thing.CategoryItem) > 0xFFFF {
+		features.ExtendedItems = true
+	}
 	if features.SpriteSize != p.features.SpriteSize {
 		return fmt.Errorf("changing sprite size from %d to %d is not supported", p.features.SpriteSize, features.SpriteSize)
 	}

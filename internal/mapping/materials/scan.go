@@ -305,7 +305,7 @@ func AutoTilesets(db *otitems.DB) []*Tileset {
 		sets[i] = &Tileset{Name: group.name, Auto: true}
 	}
 	db.Each(func(itemType *otitems.Type) {
-		if itemType.Flags.Has(otitems.FlagMeta) || itemType.ClientID == 0 {
+		if itemType.Flags.Has(otitems.FlagMeta) || itemType.EffectiveClientID() == 0 || itemType.EffectiveID() > 0xFFFF {
 			return
 		}
 		for i, group := range groups {

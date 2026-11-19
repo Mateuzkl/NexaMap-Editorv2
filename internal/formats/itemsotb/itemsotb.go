@@ -81,6 +81,7 @@ const (
 	AttrMaxReadChars      = 0x23
 	AttrLight             = 0x2A
 	AttrStackOrder        = 0x2B
+	AttrRotateTo          = 0x2C
 	AttrTradeAs           = 0x2D
 )
 
@@ -226,10 +227,24 @@ func (it *Item) u16(attrType byte) uint16 {
 	return 0
 }
 
-func (it *Item) ServerID() uint16 { return it.u16(AttrServerID) }
+func (it *Item) u32OrU16(attrType byte) uint32 {
+	data := it.Attr(attrType)
+	if len(data) >= 4 {
+		return binary.LittleEndian.Uint32(data)
+	}
+	if len(data) >= 2 {
+		return uint32(binary.LittleEndian.Uint16(data))
+	}
+	return 0
+}
+
+func (it *Item) ServerID() uint16   { return it.u16(AttrServerID) }
+func (it *Item) ServerID32() uint32 { return it.u32OrU16(AttrServerID) }
 
 // ClientID returns the client id (0 when missing, as for deprecated items).
-func (it *Item) ClientID() uint16 { return it.u16(AttrClientID) }
+func (it *Item) ClientID() uint16   { return it.u16(AttrClientID) }
+func (it *Item) ClientID32() uint32 { return it.u32OrU16(AttrClientID) }
+func (it *Item) RotateTo32() uint32 { return it.u32OrU16(AttrRotateTo) }
 
 // Deprecated reports whether the item is a deprecated placeholder, which
 // has no client id.
@@ -237,6 +252,22 @@ func (it *Item) Deprecated() bool { return it.Group == GroupDeprecated }
 
 func (it *Item) SetServerID(id uint16) { it.set(AttrServerID, u16(id)) }
 func (it *Item) SetClientID(id uint16) { it.set(AttrClientID, u16(id)) }
+
+func (it *Item) SetServerID32(id uint32) {
+	if id > 0xFFFF || len(it.Attr(AttrServerID)) == 4 {
+		it.set(AttrServerID, u32(id))
+		return
+	}
+	it.set(AttrServerID, u16(uint16(id)))
+}
+
+func (it *Item) SetClientID32(id uint32) {
+	if id > 0xFFFF || len(it.Attr(AttrClientID)) == 4 {
+		it.set(AttrClientID, u32(id))
+		return
+	}
+	it.set(AttrClientID, u16(uint16(id)))
+}
 
 func (it *Item) set(attrType byte, data []byte) {
 	for i := range it.Attrs {
@@ -249,9 +280,17 @@ func (it *Item) set(attrType byte, data []byte) {
 }
 
 func u16(value uint16) []byte { return binary.LittleEndian.AppendUint16(nil, value) }
+func u32(value uint32) []byte { return binary.LittleEndian.AppendUint32(nil, value) }
 
 func NewItem(serverID, clientID uint16) *Item {
 	return &Item{Flags: FlagMovable, Attrs: []Attr{{AttrServerID, u16(serverID)}, {AttrClientID, u16(clientID)}}}
+}
+
+func NewItem32(serverID, clientID uint32) *Item {
+	item := &Item{Flags: FlagMovable}
+	item.SetServerID32(serverID)
+	item.SetClientID32(clientID)
+	return item
 }
 
 func (it *Item) Clone() *Item {

@@ -13,9 +13,11 @@ import (
 )
 
 type FindQuery struct {
-	// IDs are server ids to find (empty: use Name or Kind).
-	IDs  []uint16 `json:"ids"`
-	Name string   `json:"name"`
+	// IDs are server ids to find (empty: use ClientID, SpriteID, Name or Kind).
+	IDs      []uint16 `json:"ids"`
+	ClientID uint32   `json:"clientId,omitempty"`
+	SpriteID uint32   `json:"spriteId,omitempty"`
+	Name     string   `json:"name"`
 	// Kind is "unique", "action", "container", "writeable", "teleport",
 	// "door", "duplicate" (same item twice on a tile) or "".
 	Kind string `json:"kind"`
@@ -98,6 +100,10 @@ func firstDuplicate(items []otmap.Item) (otmap.Item, bool) {
 func (e *Editor) matchFindItem(query FindQuery, lowerName string, item *otmap.Item) (bool, string) {
 	itemType := e.itemType(item.ID)
 	switch {
+	case query.ClientID != 0:
+		if itemType == nil || itemType.EffectiveClientID() != query.ClientID {
+			return false, ""
+		}
 	case len(query.IDs) > 0:
 		if !slices.Contains(query.IDs, item.ID) {
 			return false, ""
@@ -119,6 +125,17 @@ func (e *Editor) matchFindItem(query FindQuery, lowerName string, item *otmap.It
 	}
 	if detail == "" && query.ActionID != 0 {
 		detail = "aid " + strconv.Itoa(int(query.ActionID))
+	}
+	if detail == "" {
+		if query.SpriteID != 0 {
+			if itemType != nil && itemType.EffectiveClientID() != 0 {
+				detail = fmt.Sprintf("sprite %d · client %d", query.SpriteID, itemType.EffectiveClientID())
+			} else {
+				detail = fmt.Sprintf("sprite %d", query.SpriteID)
+			}
+		} else if query.ClientID != 0 {
+			detail = fmt.Sprintf("client %d", query.ClientID)
+		}
 	}
 	return true, detail
 }

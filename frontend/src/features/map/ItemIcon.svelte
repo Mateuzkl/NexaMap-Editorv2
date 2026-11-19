@@ -17,7 +17,7 @@
 		crisp?: boolean;
 	} = $props();
 
-	const client = $derived(id && map.items ? map.items.client[id] : 0);
+	const client = $derived(id && map.items ? map.items.clientId(id) : 0);
 	const src = $derived(
 		outfit
 			? res.thumb(Category.CategoryOutfit, outfit, versions.thing(Category.CategoryOutfit, outfit))

@@ -355,3 +355,43 @@ func TestApplyXMLTypes(t *testing.T) {
 		t.Fatal("broken xml parsed")
 	}
 }
+
+func TestDB32BitAndExtendedOTB(t *testing.T) {
+	item70k := thing.New(70000, thing.CategoryItem)
+	item70k.Name = "mega sword"
+	item70k.Props.Pickupable = true
+	item2B := thing.New(2_000_000_000, thing.CategoryItem)
+	item2B.Name = "billion crown"
+
+	db := FromClient(fakeSource{70000: item70k, 2_000_000_000: item2B}, 70000, nil)
+	if db.MaxID32() != 70000 || db.Get32(70000) == nil || db.Get32(70000).EffectiveClientID() != 70000 {
+		t.Fatalf("FromClient 32-bit item 70000 missing: max=%d item=%+v", db.MaxID32(), db.Get32(70000))
+	}
+
+	sparseDB := NewDB(ModeOTB, []*Type{
+		{ID32: 100, ClientID32: 100, Name: "grass"},
+		{ID32: 70000, ClientID32: 80000, Name: "extended item"},
+		{ID32: 2_000_000_000, ClientID32: 3_000_000_000, Name: "billion item"},
+	})
+	if sparseDB.MaxID32() != 2_000_000_000 || sparseDB.Count() != 3 {
+		t.Fatalf("sparseDB max=%d count=%d", sparseDB.MaxID32(), sparseDB.Count())
+	}
+	if id, ok := sparseDB.FromClient32(3_000_000_000); !ok || id != 2_000_000_000 {
+		t.Fatalf("FromClient32(3B) = %d %v", id, ok)
+	}
+	if err := sparseDB.ApplyXML([]byte(`<items>
+		<item id="2000000000" name="updated billion"><attribute key="rotateTo" value="2000000001"/></item>
+		<item fromid="69999" toid="70005" name="range 70k"/>
+	</items>`)); err != nil {
+		t.Fatal(err)
+	}
+	if got := sparseDB.Get32(2_000_000_000); got == nil || got.Name != "updated billion" || got.EffectiveRotateTo() != 2_000_000_001 {
+		t.Fatalf("32-bit XML item = %+v", got)
+	}
+	if got := sparseDB.Get32(70000); got == nil || got.Name != "range 70k" {
+		t.Fatalf("32-bit XML range = %+v", got)
+	}
+	if hits := sparseDB.Search32("2000000000", 5); len(hits) != 1 || hits[0] != 2_000_000_000 {
+		t.Fatalf("Search32(2000000000) = %v", hits)
+	}
+}

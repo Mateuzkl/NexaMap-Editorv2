@@ -3,6 +3,7 @@
 	import { toast } from "../../lib/state/app.svelte";
 	import { plural } from "../../lib/util/format";
 	import { MapService } from "../../lib/map/data/api";
+	import { parseUint32ItemId } from "../../lib/map/data/items";
 	import { goTo, mapCommands } from "../../lib/map/view/commands";
 	import { edit, map } from "../../lib/map/state.svelte";
 	import Icon from "../../lib/ui/Icon.svelte";
@@ -23,9 +24,13 @@
 		{ value: "duplicate", label: "Same item twice on a tile" },
 	];
 
+	type FindMode = "item" | "client" | "sprite";
+	let findMode = $state<FindMode>("item");
 	let ids = $state<number[]>([]);
 	let pick = $state(0);
 	let name = $state("");
+	let clientIdText = $state("");
+	let spriteIdText = $state("");
 	let kind = $state("");
 	let actionId = $state("");
 	let uniqueId = $state("");
@@ -51,6 +56,7 @@
 		if (!preset) return;
 		map.findPreset = null;
 		if (preset.ids?.length) {
+			findMode = "item";
 			ids = [...preset.ids];
 			name = "";
 		}
@@ -60,7 +66,15 @@
 	});
 
 	const results = $derived(map.results);
-	const canFind = $derived(ids.length > 0 || !!name.trim() || !!kind || !!Number(actionId) || !!Number(uniqueId));
+	const parsedClientId = $derived(parseUint32ItemId(clientIdText));
+	const parsedSpriteId = $derived(parseUint32ItemId(spriteIdText));
+	const canFind = $derived(
+		findMode === "client"
+			? parsedClientId.valid && parsedClientId.value > 0
+			: findMode === "sprite"
+				? parsedSpriteId.valid && parsedSpriteId.value > 0
+				: ids.length > 0 || !!name.trim() || !!kind || !!Number(actionId) || !!Number(uniqueId),
+	);
 
 	function addId(id: number) {
 		if (id && !ids.includes(id)) ids = [...ids, id];
@@ -68,26 +82,46 @@
 	}
 
 	async function find() {
-		if (map.activeId === null || !canFind) return;
+		if (map.activeId === null) return;
+		if (findMode === "client" && (!parsedClientId.valid || parsedClientId.value <= 0)) {
+			toast(parsedClientId.error || "Enter a valid Client ID (1 - 4294967295).", "error");
+			return;
+		}
+		if (findMode === "sprite" && (!parsedSpriteId.valid || parsedSpriteId.value <= 0)) {
+			toast(parsedSpriteId.error || "Enter a valid Sprite ID (1 - 4294967295).", "error");
+			return;
+		}
+		if (!canFind) return;
 		busy = true;
 		try {
-			const found = await MapService.Find(map.activeId, {
-				ids,
-				name: ids.length ? "" : name.trim(),
-				kind,
-				actionId: Number(actionId) || 0,
-				uniqueId: Number(uniqueId) || 0,
-				inSelection,
-				containers,
-				limit: 5000,
-			});
-			const title = ids.length
-				? ids.length === 1
-					? (map.items?.name(ids[0]) ?? "Found")
-					: `${ids.length} items`
-				: name
-					? `“${name}”`
-					: (KINDS.find((option) => option.value === kind)?.label ?? "Found");
+			const serverIds = findMode === "item" ? ids.filter((id) => id > 0 && id <= 0xffff) : [];
+			const onlyHighIds = findMode === "item" && ids.length > 0 && serverIds.length === 0;
+			const found = onlyHighIds
+				? { results: [], more: false }
+				: await MapService.Find(map.activeId, {
+						ids: serverIds,
+						clientId: findMode === "client" ? parsedClientId.value : 0,
+						spriteId: findMode === "sprite" ? parsedSpriteId.value : 0,
+						name: findMode === "item" && !ids.length ? name.trim() : "",
+						kind,
+						actionId: Number(actionId) || 0,
+						uniqueId: Number(uniqueId) || 0,
+						inSelection,
+						containers,
+						limit: 5000,
+					});
+			const title =
+				findMode === "client"
+					? `Client ID ${parsedClientId.value}`
+					: findMode === "sprite"
+						? `Sprite ID ${parsedSpriteId.value}`
+						: ids.length
+							? ids.length === 1
+								? map.items?.name(ids[0]) || `Item ${ids[0]}`
+								: `${ids.length} items`
+							: name
+								? `“${name}”`
+								: (KINDS.find((option) => option.value === kind)?.label ?? "Found");
 			map.results = {
 				title,
 				more: found.more,
@@ -145,31 +179,54 @@
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div class="body" role="search" onkeydown={(event) => event.key === "Escape" && (event.stopPropagation(), close())}>
 		<div class="m-form">
-			<ItemPicker
-				bind:value={pick}
-				placeholder={ids.length ? "Add another item…" : "Item name or id…"}
-				onchange={addId}
-			/>
-			{#if ids.length}
-				<div class="chips">
-					{#each ids as id}
-						<span class="chip" title={String(id)}
-							><ItemIcon {id} size={18} /><span class="cn">{map.items?.name(id)}</span><button
-								class="x"
-								title="Remove"
-								onclick={() => (ids = ids.filter((other) => other !== id))}
-								><Icon name="close" size={10} /></button
-							></span
-						>
-					{/each}
-				</div>
-			{:else}
+			<div class="m-seg scope">
+				<button class:on={findMode === "item"} onclick={() => (findMode = "item")}>Server ID / Name</button>
+				<button class:on={findMode === "client"} onclick={() => (findMode = "client")}>Client ID</button>
+				<button class:on={findMode === "sprite"} onclick={() => (findMode = "sprite")}>Sprite ID</button>
+			</div>
+			{#if findMode === "client"}
 				<input
 					class="t-input"
-					placeholder="…or any item whose name contains"
-					bind:value={name}
+					placeholder="Client ID (1 - 4294967295)…"
+					bind:value={clientIdText}
 					onkeydown={(event) => event.key === "Enter" && find()}
 				/>
+			{:else if findMode === "sprite"}
+				<input
+					class="t-input"
+					placeholder="Sprite ID (1 - 4294967295)…"
+					bind:value={spriteIdText}
+					onkeydown={(event) => event.key === "Enter" && find()}
+				/>
+			{:else}
+				<ItemPicker
+					bind:value={pick}
+					allowUnlisted={true}
+					placeholder={ids.length ? "Add another item…" : "Item name or Server ID (1 - 4294967295)…"}
+					onchange={addId}
+				/>
+				{#if ids.length}
+					<div class="chips">
+						{#each ids as id}
+							<span class="chip" title={String(id)}
+								><ItemIcon {id} size={18} /><span class="cn">{map.items?.name(id) || `ID ${id}`}</span
+								><button
+									class="x"
+									title="Remove"
+									onclick={() => (ids = ids.filter((other) => other !== id))}
+									><Icon name="close" size={10} /></button
+								></span
+							>
+						{/each}
+					</div>
+				{:else}
+					<input
+						class="t-input"
+						placeholder="…or any item whose name contains"
+						bind:value={name}
+						onkeydown={(event) => event.key === "Enter" && find()}
+					/>
+				{/if}
 			{/if}
 			<details>
 				<summary class="t-label">More conditions{kind || actionId || uniqueId ? " (set)" : ""}</summary>

@@ -179,10 +179,10 @@ func (s *Server) addCatalogTools(server *mcp.Server) {
 
 	addTool(server, "get_item", "One item type: name, client id, kind, flags and brush.",
 		func(_ context.Context, args itemArgs) (any, error) {
-			if args.ID <= 0 || args.ID > 0xFFFF {
+			if args.ID <= 0 || int64(args.ID) > 0xFFFFFFFF {
 				return nil, errors.New("bad item id")
 			}
-			return s.maps.Item(uint16(args.ID))
+			return s.maps.Item32(uint32(args.ID))
 		})
 
 	addTool(server, "list_creatures", "Monsters and NPCs that can be placed (from the brush file and the server data folder).",

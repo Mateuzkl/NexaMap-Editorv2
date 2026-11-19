@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MapService, type ItemTable } from "./data/api";
+import { ItemIndex, parseUint32ItemId } from "./data/items";
 import { loadMapData, map } from "./state.svelte";
 
 type View = Awaited<ReturnType<typeof MapService.ViewData>>;
@@ -86,5 +87,36 @@ describe("map tab item modes", () => {
 		expect(map.activeId).toBe(2);
 		expect(map.data?.mode).toBe("client");
 		expect(map.items?.mode).toBe("client");
+	});
+
+	it("supports 32-bit item IDs and client IDs without 16-bit truncation", () => {
+		expect(parseUint32ItemId("0")).toMatchObject({ valid: true, value: 0 });
+		expect(parseUint32ItemId("65536")).toMatchObject({ valid: true, value: 65536 });
+		expect(parseUint32ItemId("4294967295")).toMatchObject({ valid: true, value: 4294967295 });
+		expect(parseUint32ItemId("4294967296").valid).toBe(false);
+		expect(parseUint32ItemId("-1").valid).toBe(false);
+		expect(parseUint32ItemId("abc").valid).toBe(false);
+
+		const index = new ItemIndex({
+			ids: [100, 70000, 2_000_000_000],
+			clients: [100, 80000, 3_000_000_000],
+			flags: [1, 2, 1],
+			tops: [0, 1, 2],
+			minimap: [12, 34, 56],
+			names: ["Grass", "Extended Sword", "Billion Crown"],
+			kinds: [0, 0, 0],
+			speeds: [100, 0, 250],
+			mode: "otb",
+			maxId: 2_000_000_000,
+			flagbits: { ground: 1, pickupable: 2 },
+		});
+		expect(index.clientId(70000)).toBe(80000);
+		expect(index.client[70000]).toBe(80000);
+		expect(index.clientId(2_000_000_000)).toBe(3_000_000_000);
+		expect(index.has(2_000_000_000)).toBe(true);
+		expect(index.name(2_000_000_000)).toBe("Billion Crown");
+		expect(index.topOf(2_000_000_000)).toBe(2);
+		expect(index.is(2_000_000_000, "ground")).toBe(true);
+		expect(index.search("2000000000", 10)).toEqual([2_000_000_000]);
 	});
 });

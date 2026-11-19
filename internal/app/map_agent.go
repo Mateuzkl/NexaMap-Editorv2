@@ -41,8 +41,8 @@ func (ms *MapService) ActiveMap() int {
 
 // ItemSummary describes an item type for item searches.
 type ItemSummary struct {
-	ID       uint16 `json:"id"`
-	ClientID uint16 `json:"clientId"`
+	ID       uint32 `json:"id"`
+	ClientID uint32 `json:"clientId"`
 	Name     string `json:"name"`
 	// Kind is what the item is for ("container", "door"...; see
 	// otitems.Type.KindName), Flags its flags by name.
@@ -66,8 +66,11 @@ func flagNames(flags otitems.Flags) []string {
 }
 
 func (data *mapData) itemSummary(itemType *otitems.Type) ItemSummary {
-	summary := ItemSummary{ID: itemType.ID, ClientID: itemType.ClientID, Name: itemType.DisplayName(), Kind: itemType.KindName(), Flags: flagNames(itemType.Flags)}
-	summary.Brush, summary.BrushKind = data.brushes.BrushOf(itemType.ID)
+	id := itemType.EffectiveID()
+	summary := ItemSummary{ID: id, ClientID: itemType.EffectiveClientID(), Name: itemType.DisplayName(), Kind: itemType.KindName(), Flags: flagNames(itemType.Flags)}
+	if id <= 0xFFFF {
+		summary.Brush, summary.BrushKind = data.brushes.BrushOf(uint16(id))
+	}
 	return summary
 }
 
@@ -89,7 +92,7 @@ func (ms *MapService) SearchItems(query string, flags []string, limit int) (foun
 			if len(found) >= limit || !itemType.Flags.Has(required) {
 				return
 			}
-			if query != "" && !strings.Contains(strings.ToLower(itemType.Name), query) && query != itemIDText(itemType.ID) {
+			if query != "" && !strings.Contains(strings.ToLower(itemType.Name), query) && query != itemIDText32(itemType.EffectiveID()) && query != itemIDText32(itemType.EffectiveClientID()) {
 				return
 			}
 			found = append(found, data.itemSummary(itemType))
@@ -101,10 +104,15 @@ func (ms *MapService) SearchItems(query string, flags []string, limit int) (foun
 
 // Item describes one item type.
 func (ms *MapService) Item(id uint16) (summary ItemSummary, err error) {
+	return ms.Item32(uint32(id))
+}
+
+// Item32 describes one 32-bit item type.
+func (ms *MapService) Item32(id uint32) (summary ItemSummary, err error) {
 	err = ms.withData(func(data *mapData) error {
-		itemType := data.items.Get(id)
+		itemType := data.items.Get32(id)
 		if itemType == nil {
-			return errors.New("unknown item " + itemIDText(id))
+			return errors.New("unknown item " + itemIDText32(id))
 		}
 		summary = data.itemSummary(itemType)
 		return nil
@@ -112,7 +120,8 @@ func (ms *MapService) Item(id uint16) (summary ItemSummary, err error) {
 	return summary, err
 }
 
-func itemIDText(id uint16) string { return strconv.Itoa(int(id)) }
+func itemIDText(id uint16) string   { return strconv.Itoa(int(id)) }
+func itemIDText32(id uint32) string { return strconv.FormatUint(uint64(id), 10) }
 
 // Creatures lists the monsters and NPCs that can be placed.
 func (ms *MapService) Creatures() (creatures []*materials.CreatureType, err error) {

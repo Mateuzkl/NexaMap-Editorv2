@@ -15,12 +15,13 @@ func ParseOTB(data []byte) (*DB, error) {
 }
 
 // FromOTB builds a database from a parsed items.otb. Deprecated items and
-// items without a server id are left out.
+// items without a server id are left out. Both 16-bit and 32-bit server/client
+// ids are supported.
 func FromOTB(file *itemsotb.File) *DB {
 	db := &DB{Mode: ModeOTB}
 	db.MajorVersion, db.MinorVersion, db.BuildNumber = file.Version()
 	for _, item := range file.Items {
-		if item.Deprecated() || item.ServerID() == 0 {
+		if item.Deprecated() || item.ServerID32() == 0 {
 			continue
 		}
 		db.set(typeFromOTB(item))
@@ -31,9 +32,16 @@ func FromOTB(file *itemsotb.File) *DB {
 
 func typeFromOTB(item *itemsotb.Item) *Type {
 	group := Group(item.Group)
+	serverID := item.ServerID32()
+	clientID := item.ClientID32()
+	rotateTo := item.RotateTo32()
 	itemType := &Type{
 		ID:           item.ServerID(),
 		ClientID:     item.ClientID(),
+		ID32:         serverID,
+		ClientID32:   clientID,
+		RotateTo:     uint16(rotateTo),
+		RotateTo32:   rotateTo,
 		Group:        group,
 		Flags:        flagsFromOTB(item.Flags, group),
 		Name:         string(item.Attr(itemsotb.AttrName)),

@@ -11,17 +11,28 @@ type ThingSource interface {
 }
 
 // FromClient builds a database where server ids are client ids, from every
-// item of the client. maxID is the highest client item id.
+// item of the client. maxID is the highest client item id (full 32-bit uint32).
 func FromClient(source ThingSource, maxID uint32, names map[uint32]string) *DB {
 	db := &DB{Mode: ModeClient}
-	for id := thing.CategoryItem.MinID(); id <= maxID && id <= math.MaxUint16; id++ {
+	minID := thing.CategoryItem.MinID()
+	if maxID < minID {
+		db.index()
+		return db
+	}
+	for id := minID; id <= maxID; id++ {
 		clientThing, err := source.Thing(thing.CategoryItem, id)
-		if err != nil {
-			continue
+		if err == nil && clientThing != nil {
+			itemType := &Type{ID32: id, ClientID32: id, Name: names[id]}
+			if id <= math.MaxUint16 {
+				itemType.ID = uint16(id)
+				itemType.ClientID = uint16(id)
+			}
+			applyThing(itemType, clientThing, true)
+			db.set(itemType)
 		}
-		itemType := &Type{ID: uint16(id), ClientID: uint16(id), Name: names[id]}
-		applyThing(itemType, clientThing, true)
-		db.set(itemType)
+		if id == maxID {
+			break
+		}
 	}
 	db.index()
 	return db
@@ -31,16 +42,17 @@ func FromClient(source ThingSource, maxID uint32, names map[uint32]string) *DB {
 // (minimap colors, full ground, light) and fills flags of items whose otb
 // entry has none.
 func (db *DB) ApplyClient(source ThingSource) {
-	for _, itemType := range db.items {
-		if itemType == nil || itemType.ClientID == 0 {
-			continue
+	db.Each(func(itemType *Type) {
+		clientID := itemType.EffectiveClientID()
+		if clientID == 0 {
+			return
 		}
-		clientThing, err := source.Thing(thing.CategoryItem, uint32(itemType.ClientID))
-		if err != nil {
-			continue
+		clientThing, err := source.Thing(thing.CategoryItem, clientID)
+		if err != nil || clientThing == nil {
+			return
 		}
 		applyThing(itemType, clientThing, false)
-	}
+	})
 }
 
 // applyThing copies client flags. all also sets what items.otb normally

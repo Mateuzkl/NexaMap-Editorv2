@@ -25,7 +25,8 @@ func OptionsFor(version uint16, features client.Features) Options {
 func (o Options) hasPatternZ() bool { return o.Format >= 3 }
 
 type File struct {
-	Signature uint32
+	Signature     uint32
+	ExtendedItems bool
 	// Things holds things of each category ordered by id, starting at
 	// Category.MinID().
 	Things map[thing.Category][]*thing.Thing
@@ -50,8 +51,21 @@ func (f *File) MaxID(category thing.Category) uint32 {
 }
 
 func Decode(data []byte, opts Options) (*File, error) {
+	file, err := decodeOnce(data, opts)
+	if err != nil && !opts.Features.ExtendedItems && len(data) >= 14 {
+		extOpts := opts
+		extOpts.Features.ExtendedItems = true
+		if extFile, extErr := decodeOnce(data, extOpts); extErr == nil {
+			return extFile, nil
+		}
+	}
+	return file, err
+}
+
+func decodeOnce(data []byte, opts Options) (*File, error) {
 	r := binio.NewReader(data)
 	file := NewFile(r.U32())
+	file.ExtendedItems = opts.Features.ExtendedItems
 	var counts [4]uint32
 	for i := range counts {
 		if i == 0 && opts.Features.ExtendedItems {
@@ -68,6 +82,9 @@ func Decode(data []byte, opts Options) (*File, error) {
 		maxID := counts[i]
 		if maxID < category.MinID() {
 			continue
+		}
+		if uint64(maxID-category.MinID()+1) > uint64(len(data)) {
+			return nil, fmt.Errorf("dat header: %s count %d exceeds file size", category, maxID)
 		}
 		list := make([]*thing.Thing, 0, maxID-category.MinID()+1)
 		for id := category.MinID(); id <= maxID; id++ {

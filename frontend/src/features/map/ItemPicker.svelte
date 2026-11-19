@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { toCss } from "../../lib/pixelscale";
+	import { parseUint32ItemId } from "../../lib/map/data/items";
 	import { map } from "../../lib/map/state.svelte";
 	import { portal } from "../../lib/ui/portal";
 	import ItemIcon from "./ItemIcon.svelte";
@@ -8,8 +9,15 @@
 		value = $bindable(0),
 		placeholder = "Item name or id…",
 		width = 0,
+		allowUnlisted = false,
 		onchange,
-	}: { value?: number; placeholder?: string; width?: number; onchange?: (id: number) => void } = $props();
+	}: {
+		value?: number;
+		placeholder?: string;
+		width?: number;
+		allowUnlisted?: boolean;
+		onchange?: (id: number) => void;
+	} = $props();
 
 	let text = $state("");
 	let open = $state(false);
@@ -48,8 +56,11 @@
 			active = Math.max(active - 1, 0);
 		} else if (event.key === "Enter") {
 			event.preventDefault();
+			const parsed = parseUint32ItemId(text);
 			if (results[active] !== undefined) choose(results[active]);
-			else if (map.items?.has(Number(text))) choose(Number(text));
+			else if (parsed.valid && parsed.value > 0 && (allowUnlisted || map.items?.has(parsed.value))) {
+				choose(parsed.value);
+			}
 		} else if (event.key === "Escape" && open) {
 			event.stopPropagation();
 			open = false;
