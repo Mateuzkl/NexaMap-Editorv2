@@ -6,6 +6,7 @@ export * as UpdateService from "../../bindings/github.com/nekiro/ots-creator/int
 export * as WindowService from "../../bindings/github.com/nekiro/ots-creator/internal/app/windowservice";
 export * as ViewerService from "../../bindings/github.com/nekiro/ots-creator/internal/app/viewerservice";
 export * as SettingsService from "../../bindings/github.com/nekiro/ots-creator/internal/app/settingsservice";
+export * as WorkspaceService from "../../bindings/github.com/nekiro/ots-creator/internal/app/workspaceservice";
 export * as MarketService from "../../bindings/github.com/nekiro/ots-creator/internal/app/marketservice";
 export * as CompareService from "../../bindings/github.com/nekiro/ots-creator/internal/app/compareservice";
 export type {
@@ -24,8 +25,19 @@ export type {
 	MarketImport,
 	ShareRequest,
 	TargetPlan,
+	WorkspaceInspection,
+	ClientInspection,
+	ClientCandidate,
+	ServerResources,
+	ResourceResult,
+	DetectedMap,
 } from "../../bindings/github.com/nekiro/ots-creator/internal/app/models";
-export type { Settings, Recent } from "../../bindings/github.com/nekiro/ots-creator/internal/settings/models";
+export { ResourceState } from "../../bindings/github.com/nekiro/ots-creator/internal/app/models";
+export type {
+	Settings,
+	Recent,
+	WorkspaceProfile,
+} from "../../bindings/github.com/nekiro/ots-creator/internal/settings/models";
 export type {
 	OptimizeOptions,
 	OptimizeResult,

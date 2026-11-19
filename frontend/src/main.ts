@@ -1,5 +1,6 @@
 import { mount } from "svelte";
 import "./theme.css";
+import "./modern-theme.css";
 import App from "./App.svelte";
 import PlayWindow from "./features/map/PlayWindow.svelte";
 import { initPixelScale } from "./lib/pixelscale";

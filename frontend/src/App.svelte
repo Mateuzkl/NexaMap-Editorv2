@@ -26,9 +26,11 @@
 	import ItemsOtbDialog from "./features/dialogs/ItemsOtbDialog.svelte";
 	import ItemIdsDialog from "./features/map/dialogs/ItemIdsDialog.svelte";
 	import ShareDialog from "./features/market/ShareDialog.svelte";
-	import { listPanelWidth, loadPrefs, prefs } from "./lib/state/prefs.svelte";
+	import { currentTheme, listPanelWidth, loadPrefs, prefs } from "./lib/state/prefs.svelte";
+	import { isModernTheme } from "./lib/theme/theme.svelte";
 	import { setMinLayoutWidth } from "./lib/pixelscale";
 	import StartScreen from "./features/StartScreen.svelte";
+	import WorkspaceScreen from "./features/workspace/WorkspaceScreen.svelte";
 	import SpriteList from "./features/SpriteList.svelte";
 	import StatusBar from "./features/StatusBar.svelte";
 	import ThingList from "./features/ThingList.svelte";
@@ -137,9 +139,15 @@
 		};
 	});
 
-	// Without a client only the start screen is shown; it opens the editor asked for.
+	// Without a client only the start/workspace screen is shown; it opens the editor asked for.
 	$effect(() => {
 		if (!app.open) map.mode = "objects";
+	});
+
+	const uiTheme = $derived(currentTheme());
+	const modern = $derived(isModernTheme(uiTheme));
+	$effect(() => {
+		if (!modern && app.showWorkspace) app.showWorkspace = false;
 	});
 
 	const listWidth = $derived(listPanelWidth(prefs.settings.listColumns || 7));
@@ -153,7 +161,9 @@
 
 <div class="shell" data-file-drop-target>
 	<MenuBar />
-	{#if !app.open}
+	{#if modern && (!app.open || app.showWorkspace)}
+		<main class="workspace-host"><WorkspaceScreen /></main>
+	{:else if !app.open}
 		<main><StartScreen /></main>
 	{:else if map.mode === "map"}
 		<MapEditor bind:hoverText={mapHover} />
@@ -224,6 +234,11 @@
 			minmax(250px, var(--right-w));
 		min-width: calc(var(--list-w, 300px) + 574px); /* 300 + 250 + splitters */
 		padding: 6px;
+	}
+	main.workspace-host {
+		display: flex;
+		min-width: 0;
+		padding: 0;
 	}
 	.left,
 	.right,

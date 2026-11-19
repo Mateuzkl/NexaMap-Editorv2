@@ -111,6 +111,21 @@ Later versions install from the built-in updater.
 - Publish an object, sprites or an `.otobj` / `.obd` / image file. No account: pick a
   nickname, Tibia-style tags and a license, and delete your own entries later.
 
+### Themes & Modern Workspace
+
+- **Three built-in themes:** switch live in **Settings > Appearance** or from the header
+  button between **Classic Tibia** (original OTS Creator textures, bevel frames, and pixel
+  fonts), **Modern Dark**, and **Modern Light**. Existing installations without a saved
+  theme preference stay on **Classic Tibia** until changed.
+- **Unified Modern Workspace:** select a **Client** folder (`.dat`/`.spr`, `.otfi`, or
+  Tibia 12+ `assets/`) and an optional **Server** folder. OTS Creator scans read-only with
+  bounded depth to detect and validate `items.otb`, `items.xml`, `.otbm`/`.otmap` maps,
+  monsters, NPCs, and server layout evidence, without modifying any source files.
+- **Safe resource mapping & profiles:** review or override detected paths before opening,
+  save named workspace profiles for one-click switching, and keep per-map ServerID /
+  ClientID safety intact. Ambiguous folders with multiple clients or `items.otb` files ask
+  you to choose explicitly instead of guessing silently.
+
 ### Performance
 
 - Heavy work (comparing, searching, optimizing, decoding Tibia 12+ sheets, exporting) uses

@@ -10,6 +10,7 @@
 	import NumberField from "../../../lib/ui/NumberField.svelte";
 	import Dialog from "../../../lib/ui/Dialog.svelte";
 	import Select from "../../../lib/ui/Select.svelte";
+	import AppearanceSettings from "./AppearanceSettings.svelte";
 	import KeySettings from "./KeySettings.svelte";
 	import MapSettings, { MAP_OPTIONS } from "./MapSettings.svelte";
 
@@ -20,6 +21,12 @@
 				group: "Application",
 				label: "General",
 				words: "startup check for updates reopen last client recent clients clear list",
+			},
+			{
+				id: "appearance",
+				group: "Application",
+				label: "Appearance",
+				words: "theme appearance classic tibia modern dark light workspace sidebar look skin",
 			},
 			{
 				id: "agents",
@@ -128,6 +135,8 @@
 						>Clear list</button
 					>
 				</div>
+			{:else if section === "appearance"}
+				<AppearanceSettings />
 			{:else if section === "agents"}
 				<h4>MCP server</h4>
 				<label

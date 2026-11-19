@@ -43,7 +43,7 @@ export type DialogName =
 	| "itemsOtb"
 	| null;
 
-export type SettingsSection = "general" | "objects" | "map" | "keys" | "agents";
+export type SettingsSection = "general" | "appearance" | "objects" | "map" | "keys" | "agents";
 
 export type ShareTarget = (
 	| { kind: "object"; category: Category; id: number }
@@ -67,6 +67,8 @@ class AppState {
 	readonly selectedSpriteSet = $derived(new Set(this.selectedSprites));
 	toasts = $state<Toast[]>([]);
 	dialog = $state<DialogName>(null);
+	/** True when the user explicitly opened the Workspace view while a project is open. */
+	showWorkspace = $state(false);
 	/** Section the settings open at; null: the one of the open editor. */
 	settingsSection = $state<SettingsSection | null>(null);
 	busy = $state<string | null>(null);

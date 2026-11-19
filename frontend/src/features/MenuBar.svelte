@@ -6,7 +6,8 @@
 	import { app, openSettings } from "../lib/state/app.svelte";
 	import type { MenuEntry, MenuItem } from "../lib/menu.svelte";
 	import { editMenu, objectMenu, spriteMenu, toolsMenu } from "../lib/menus";
-	import { prefs, recentDir, shortPath } from "../lib/state/prefs.svelte";
+	import { currentTheme, prefs, recentDir, setUITheme, shortPath } from "../lib/state/prefs.svelte";
+	import { isModernTheme, nextTheme, themeLabel } from "../lib/theme/theme.svelte";
 	import Icon from "../lib/ui/Icon.svelte";
 	import MenuEntries from "../lib/ui/MenuEntries.svelte";
 	import { map } from "../lib/map/state.svelte";
@@ -115,6 +116,12 @@
 
 	let openMenu = $state<number | null>(null);
 	let scaleMode = $state(getMode());
+	const uiTheme = $derived(currentTheme());
+	const modern = $derived(isModernTheme(uiTheme));
+
+	function cycleTheme() {
+		void setUITheme(nextTheme(uiTheme));
+	}
 
 	function pick(item: MenuItem) {
 		openMenu = null;
@@ -137,21 +144,37 @@
 	<img class="logo" src="/icon.png" alt="" width="16" height="16" draggable="false" />
 	{#if app.open}
 		<div class="modes" role="tablist">
+			{#if modern}
+				<button
+					class="mode"
+					class:on={app.showWorkspace}
+					role="tab"
+					aria-selected={app.showWorkspace}
+					title="Workspace"
+					onclick={() => (app.showWorkspace = true)}>Workspace</button
+				>
+			{/if}
 			<button
 				class="mode"
-				class:on={map.mode === "objects"}
+				class:on={!app.showWorkspace && map.mode === "objects"}
 				role="tab"
-				aria-selected={map.mode === "objects"}
+				aria-selected={!app.showWorkspace && map.mode === "objects"}
 				title="Object editor"
-				onclick={() => mapCommands.setMode("objects")}>Objects</button
+				onclick={() => {
+					app.showWorkspace = false;
+					void mapCommands.setMode("objects");
+				}}>Objects</button
 			>
 			<button
 				class="mode"
-				class:on={map.mode === "map"}
+				class:on={!app.showWorkspace && map.mode === "map"}
 				role="tab"
-				aria-selected={map.mode === "map"}
+				aria-selected={!app.showWorkspace && map.mode === "map"}
 				title="Map editor"
-				onclick={() => mapCommands.setMode("map")}>Map</button
+				onclick={() => {
+					app.showWorkspace = false;
+					void mapCommands.setMode("map");
+				}}>Map</button
 			>
 		</div>
 	{/if}
@@ -261,6 +284,12 @@
 		</div>
 	{/if}
 	<div class="spacer"></div>
+	<button
+		type="button"
+		class="theme-switch"
+		title={`Interface theme: ${themeLabel(uiTheme)} (click to switch)`}
+		onclick={cycleTheme}>{themeLabel(uiTheme)}</button
+	>
 	<!-- Frameless window: OTClient miniwindow buttons instead of the native frame. -->
 	<div class="winctl">
 		<button class="wbtn min" title="Minimize" aria-label="Minimize" onclick={() => Window.Minimise()}></button>
@@ -319,8 +348,23 @@
 	}
 	.menu,
 	.toolbar,
+	.theme-switch,
 	.winctl {
 		--wails-draggable: no-drag;
+	}
+	.theme-switch {
+		font: inherit;
+		font-size: var(--fs-small);
+		color: var(--text-dim);
+		background: rgba(0, 0, 0, 0.25);
+		border: 1px solid #333;
+		height: 20px;
+		padding: 0 7px;
+		cursor: pointer;
+	}
+	.theme-switch:hover {
+		color: var(--text-bright);
+		border-color: #666;
 	}
 	.menu {
 		position: relative;

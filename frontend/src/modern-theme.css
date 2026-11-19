@@ -1,0 +1,489 @@
+/* Modern Workspace & Editor Theme (Dark + Light)
+   Strictly scoped to :root[data-ui-theme^="modern"] so Classic Tibia stays
+   100% untouched (textures, 9-slice border-images, bitmap fonts, buttons). */
+
+:root[data-ui-theme="modern-dark"] {
+	--ui-bg: #081319;
+	--ui-sidebar: #0b1c25;
+	--ui-surface: #10232e;
+	--ui-surface-raised: #152b37;
+	--ui-border: #24414d;
+	--ui-border-strong: #315666;
+	--ui-text: #e7f1f5;
+	--ui-muted: #91aab6;
+	--ui-primary: #7c4df2;
+	--ui-primary-hover: #9166ff;
+	--ui-link: #3ad0de;
+	--ui-success: #4ed18b;
+	--ui-warning: #efc46c;
+	--ui-danger: #ef7180;
+	--ui-radius: 12px;
+	--ui-space: 8px;
+	--ui-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+	--ui-slot-bg: #0a1820;
+
+	/* Map existing OTS Creator semantic tokens to Modern Dark */
+	--font: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+	--font-small: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+	--fs: 13px;
+	--fs-small: 11px;
+	--text: #d6e4eb;
+	--text-bright: #f2f8fb;
+	--text-dim: #8aa3b0;
+	--text-disabled: #556b77;
+	--accent: #f2f8fb;
+	--gold: #efc46c;
+	--green: #4ed18b;
+	--red: #ef7180;
+	--blue: #3ad0de;
+	--select: rgba(124, 77, 242, 0.24);
+	--select-strong: rgba(124, 77, 242, 0.4);
+	--line-dark: #1d3540;
+	--line-bright: #2e4f5e;
+	color-scheme: dark;
+}
+
+:root[data-ui-theme="modern-light"] {
+	--ui-bg: #f4f7fa;
+	--ui-sidebar: #e9f0f5;
+	--ui-surface: #ffffff;
+	--ui-surface-raised: #f7fafc;
+	--ui-border: #ccd9e1;
+	--ui-border-strong: #aebfcc;
+	--ui-text: #1a2d39;
+	--ui-muted: #536a77;
+	--ui-primary: #6941d9;
+	--ui-primary-hover: #5b32c8;
+	--ui-link: #087c8c;
+	--ui-success: #137b4e;
+	--ui-warning: #8c6105;
+	--ui-danger: #b5364c;
+	--ui-radius: 12px;
+	--ui-space: 8px;
+	--ui-shadow: 0 12px 28px rgba(17, 36, 48, 0.14);
+	--ui-slot-bg: #eef3f7;
+
+	/* Map existing OTS Creator semantic tokens to Modern Light */
+	--font: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+	--font-small: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+	--fs: 13px;
+	--fs-small: 11px;
+	--text: #243845;
+	--text-bright: #10202b;
+	--text-dim: #576f7d;
+	--text-disabled: #8ea1ad;
+	--accent: #10202b;
+	--gold: #8c6105;
+	--green: #137b4e;
+	--red: #b5364c;
+	--blue: #087c8c;
+	--select: rgba(105, 65, 217, 0.14);
+	--select-strong: rgba(105, 65, 217, 0.25);
+	--line-dark: #ccd9e1;
+	--line-bright: #dde7ee;
+	color-scheme: light;
+}
+
+:root[data-ui-theme^="modern"] body {
+	font: 400 var(--fs) / 1.45 var(--font);
+	color: var(--ui-text);
+	background: var(--ui-bg);
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+/* Neutralize pixel-art image rendering on chrome (never touches sprites/canvas) */
+:root[data-ui-theme^="modern"] .t-window,
+:root[data-ui-theme^="modern"] .t-mini,
+:root[data-ui-theme^="modern"] .t-mini-header,
+:root[data-ui-theme^="modern"] .t-flat,
+:root[data-ui-theme^="modern"] .t-panel,
+:root[data-ui-theme^="modern"] .t-frame-down,
+:root[data-ui-theme^="modern"] .t-frame-up,
+:root[data-ui-theme^="modern"] .t-btn,
+:root[data-ui-theme^="modern"] .t-icon-btn,
+:root[data-ui-theme^="modern"] .t-input,
+:root[data-ui-theme^="modern"] .t-check,
+:root[data-ui-theme^="modern"] .t-tab,
+:root[data-ui-theme^="modern"] .t-sep,
+:root[data-ui-theme^="modern"] .t-vsep {
+	image-rendering: auto;
+	border-image: none;
+}
+
+/* Menu bar & header */
+:root[data-ui-theme^="modern"] .menubar {
+	height: 38px;
+	padding: 0 10px;
+	gap: 4px;
+	background: var(--ui-sidebar);
+	border-bottom: 1px solid var(--ui-border);
+	box-shadow: none;
+}
+:root[data-ui-theme^="modern"] .menubar .top,
+:root[data-ui-theme^="modern"] .menubar .mode,
+:root[data-ui-theme^="modern"] .menubar .market {
+	text-shadow: none;
+	border-radius: 6px;
+}
+:root[data-ui-theme^="modern"] .menubar .top {
+	height: 26px;
+	padding: 0 10px;
+	color: var(--ui-text);
+	font-weight: 500;
+}
+:root[data-ui-theme^="modern"] .menubar .top:hover,
+:root[data-ui-theme^="modern"] .menubar .top.on {
+	background: var(--ui-surface-raised);
+	border-color: var(--ui-border);
+}
+:root[data-ui-theme^="modern"] .menubar .modes {
+	background: var(--ui-bg);
+	border: 1px solid var(--ui-border);
+	border-radius: 8px;
+	padding: 2px;
+	gap: 2px;
+}
+:root[data-ui-theme^="modern"] .menubar .mode {
+	height: 24px;
+	padding: 0 10px;
+	border: 0;
+	background: transparent;
+	color: var(--ui-muted);
+	font-weight: 600;
+	font-size: 12px;
+}
+:root[data-ui-theme^="modern"] .menubar .mode:hover {
+	color: var(--ui-text);
+}
+:root[data-ui-theme^="modern"] .menubar .mode.on {
+	background: var(--ui-primary);
+	color: #ffffff;
+}
+:root[data-ui-theme^="modern"] .menubar .drop {
+	top: 30px;
+}
+:root[data-ui-theme^="modern"] .menubar .market {
+	height: 26px;
+	padding: 0 10px;
+	background: color-mix(in srgb, var(--ui-warning) 14%, transparent);
+	border: 1px solid color-mix(in srgb, var(--ui-warning) 35%, transparent);
+	color: var(--ui-warning);
+	font-weight: 600;
+}
+:root[data-ui-theme^="modern"] .menubar .theme-switch {
+	height: 24px;
+	padding: 0 10px;
+	border-radius: 99px;
+	border: 1px solid var(--ui-border);
+	background: var(--ui-surface);
+	color: var(--ui-muted);
+	font-size: 11.5px;
+	font-weight: 600;
+}
+:root[data-ui-theme^="modern"] .menubar .theme-switch:hover {
+	border-color: var(--ui-primary);
+	color: var(--ui-text);
+}
+
+/* Status bar */
+:root[data-ui-theme^="modern"] .status {
+	height: 26px;
+	padding: 0 12px;
+	background: var(--ui-sidebar);
+	border-top: 1px solid var(--ui-border);
+	box-shadow: none;
+	font-size: 12px;
+	color: var(--ui-muted);
+}
+
+/* Windows, mini-windows, panels */
+:root[data-ui-theme^="modern"] .t-window {
+	background: var(--ui-surface);
+	border: 1px solid var(--ui-border);
+	border-radius: 10px;
+	padding-top: 30px;
+	box-shadow: var(--ui-shadow);
+}
+:root[data-ui-theme^="modern"] .t-window > .t-window-title {
+	top: 0;
+	height: 30px;
+	line-height: 30px;
+	padding: 0 12px;
+	justify-content: flex-start;
+	font-size: 12.5px;
+	font-weight: 700;
+	color: var(--ui-text);
+	text-shadow: none;
+	border-bottom: 1px solid var(--ui-border);
+	background: var(--ui-surface-raised);
+	border-radius: 9px 9px 0 0;
+}
+:root[data-ui-theme^="modern"] .t-mini {
+	background: var(--ui-surface);
+	border: 1px solid var(--ui-border);
+	border-radius: 10px;
+	overflow: hidden;
+}
+:root[data-ui-theme^="modern"] .t-mini-header {
+	height: 30px;
+	margin: 0;
+	padding: 0 10px;
+	background: var(--ui-surface-raised);
+	border-bottom: 1px solid var(--ui-border);
+	color: var(--ui-text);
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1;
+	text-shadow: none;
+}
+:root[data-ui-theme^="modern"] .t-mini-header .t-icon-btn {
+	width: 22px;
+	height: 22px;
+}
+:root[data-ui-theme^="modern"] .t-mini-header .t-icon-btn svg {
+	width: 13px;
+	height: 13px;
+}
+:root[data-ui-theme^="modern"] .t-mini-body {
+	padding: 6px;
+}
+
+:root[data-ui-theme^="modern"] .t-flat,
+:root[data-ui-theme^="modern"] .t-panel,
+:root[data-ui-theme^="modern"] .t-frame-down,
+:root[data-ui-theme^="modern"] .t-frame-up {
+	background: var(--ui-bg);
+	border: 1px solid var(--ui-border);
+	border-radius: 8px;
+}
+
+:root[data-ui-theme^="modern"] .t-sep {
+	height: 1px;
+	background: var(--ui-border);
+	margin: 8px 0;
+}
+:root[data-ui-theme^="modern"] .t-vsep {
+	width: 1px;
+	background: var(--ui-border);
+}
+
+/* Buttons */
+:root[data-ui-theme^="modern"] .t-btn {
+	min-height: 28px;
+	height: auto;
+	padding: 4px 12px;
+	border-radius: 7px;
+	border: 1px solid var(--ui-border);
+	background: var(--ui-surface-raised);
+	color: var(--ui-text);
+	font-weight: 500;
+	text-shadow: none;
+	transition:
+		background 0.12s ease,
+		border-color 0.12s ease,
+		color 0.12s ease;
+}
+:root[data-ui-theme^="modern"] .t-btn:hover:not(:disabled) {
+	filter: none;
+	border-color: var(--ui-border-strong);
+	background: color-mix(in srgb, var(--ui-surface-raised) 80%, var(--ui-text) 6%);
+}
+:root[data-ui-theme^="modern"] .t-btn:active:not(:disabled),
+:root[data-ui-theme^="modern"] .t-btn.on {
+	padding: 4px 12px;
+	background: var(--select);
+	border-color: var(--ui-primary);
+}
+:root[data-ui-theme^="modern"] .t-btn:disabled {
+	color: var(--text-disabled);
+	opacity: 0.55;
+}
+:root[data-ui-theme^="modern"] .t-btn:focus-visible,
+:root[data-ui-theme^="modern"] .t-icon-btn:focus-visible,
+:root[data-ui-theme^="modern"] .t-input:focus-visible,
+:root[data-ui-theme^="modern"] button:focus-visible {
+	outline: 2px solid var(--ui-primary);
+	outline-offset: 1px;
+	box-shadow: none;
+}
+:root[data-ui-theme^="modern"] .t-btn.primary:not(:disabled) {
+	background: var(--ui-primary);
+	border-color: var(--ui-primary);
+	color: #ffffff;
+	font-weight: 600;
+}
+:root[data-ui-theme^="modern"] .t-btn.primary:hover:not(:disabled) {
+	background: var(--ui-primary-hover);
+	border-color: var(--ui-primary-hover);
+}
+:root[data-ui-theme^="modern"] .t-btn.green:not(:disabled) {
+	background: var(--ui-success);
+	border-color: var(--ui-success);
+	color: #062114;
+	font-weight: 600;
+}
+:root[data-ui-theme^="modern"] .t-btn.danger:not(:disabled) {
+	background: color-mix(in srgb, var(--ui-danger) 18%, transparent);
+	border-color: color-mix(in srgb, var(--ui-danger) 50%, transparent);
+	color: var(--ui-danger);
+}
+:root[data-ui-theme^="modern"] .t-btn.danger:hover:not(:disabled) {
+	background: var(--ui-danger);
+	color: #ffffff;
+}
+
+:root[data-ui-theme^="modern"] .t-icon-btn {
+	width: 26px;
+	height: 26px;
+	border-radius: 6px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--ui-muted);
+}
+:root[data-ui-theme^="modern"] .t-icon-btn:hover:not(:disabled) {
+	filter: none;
+	background: var(--ui-surface-raised);
+	border-color: var(--ui-border);
+	color: var(--ui-text);
+}
+:root[data-ui-theme^="modern"] .t-icon-btn:active:not(:disabled),
+:root[data-ui-theme^="modern"] .t-icon-btn.on {
+	background: var(--select);
+	border-color: var(--ui-primary);
+	color: var(--ui-text);
+}
+:root[data-ui-theme^="modern"] .t-icon-btn:active:not(:disabled) > *,
+:root[data-ui-theme^="modern"] .t-icon-btn.on > * {
+	transform: none;
+}
+
+/* Inputs, selects, menus, tabs */
+:root[data-ui-theme^="modern"] .t-input {
+	font: 400 var(--fs) / 1.3 var(--font);
+	min-height: 28px;
+	padding: 3px 8px;
+	border-radius: 7px;
+	border: 1px solid var(--ui-border);
+	background: var(--ui-bg);
+	color: var(--ui-text);
+}
+:root[data-ui-theme^="modern"] .t-input:focus {
+	border-color: var(--ui-primary);
+	outline: none;
+}
+
+:root[data-ui-theme^="modern"] .t-menu {
+	background: var(--ui-surface);
+	border: 1px solid var(--ui-border);
+	border-radius: 9px;
+	padding: 4px;
+	box-shadow: var(--ui-shadow);
+}
+
+:root[data-ui-theme^="modern"] .t-tab {
+	border: 1px solid transparent;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--ui-muted);
+	text-shadow: none;
+	padding: 4px 10px;
+}
+:root[data-ui-theme^="modern"] .t-tab:hover {
+	color: var(--ui-text);
+	background: var(--ui-surface-raised);
+}
+:root[data-ui-theme^="modern"] .t-tab.on {
+	background: var(--select);
+	border-color: var(--ui-primary);
+	color: var(--ui-text);
+}
+
+/* Item/sprite slots keep pixelated rendering for sprites, clean frame for chrome */
+:root[data-ui-theme^="modern"] .t-slot {
+	background: var(--ui-slot-bg);
+	border: 1px solid var(--ui-border);
+	border-radius: 6px;
+	border-image: none;
+}
+
+/* Map editor specific surfaces (map.css overrides) */
+:root[data-ui-theme^="modern"] .m-row {
+	border-radius: 6px;
+	padding: 2px 6px 2px 3px;
+}
+:root[data-ui-theme^="modern"] .m-row > .t-slot {
+	border-image: none;
+	border: 1px solid var(--ui-border);
+	background: var(--ui-slot-bg);
+	border-radius: 5px;
+}
+:root[data-ui-theme^="modern"] .m-row.on {
+	background: var(--select);
+	border-color: var(--ui-primary);
+	color: var(--ui-text);
+}
+:root[data-ui-theme^="modern"] .m-cell {
+	border-radius: 6px;
+}
+:root[data-ui-theme^="modern"] .m-cell.on {
+	border-color: var(--ui-primary);
+	background: var(--select);
+}
+:root[data-ui-theme^="modern"] .m-seg {
+	background: var(--ui-bg);
+	border: 1px solid var(--ui-border);
+	border-radius: 7px;
+	padding: 2px;
+	gap: 2px;
+}
+:root[data-ui-theme^="modern"] .m-seg > button {
+	border-image: none;
+	border: 0;
+	border-radius: 5px;
+	height: 24px;
+	color: var(--ui-muted);
+	text-shadow: none;
+	font-weight: 500;
+}
+:root[data-ui-theme^="modern"] .m-seg > button.on {
+	background: var(--ui-primary);
+	color: #ffffff;
+}
+
+/* Settings dialog nav tweaks in Modern */
+:root[data-ui-theme^="modern"] .nav .entry {
+	text-shadow: none;
+	border-radius: 6px;
+	padding: 5px 8px;
+}
+:root[data-ui-theme^="modern"] .nav {
+	box-shadow: none;
+}
+
+/* Scrollbars */
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-track {
+	background: transparent;
+}
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-thumb {
+	background: var(--ui-border);
+	border-radius: 99px;
+	border: 2px solid transparent;
+	background-clip: content-box;
+}
+:root[data-ui-theme^="modern"] ::-webkit-scrollbar-thumb:hover {
+	background: var(--ui-border-strong);
+	border: 2px solid transparent;
+	background-clip: content-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root[data-ui-theme^="modern"] * {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+	}
+}

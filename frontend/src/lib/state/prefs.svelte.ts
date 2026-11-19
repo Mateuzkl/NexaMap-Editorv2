@@ -1,4 +1,5 @@
 import { Format, SettingsService, errorMessage, type Recent, type Settings } from "../api";
+import { applyTheme, normalizeTheme, type UITheme } from "../theme/theme.svelte";
 import { toast } from "./app.svelte";
 import { dirname } from "../util/path";
 
@@ -24,8 +25,16 @@ export const prefs = $state<{ settings: Settings }>({
 		itemsOtb: {},
 		mcpServer: false,
 		mcpPort: 47800,
+		uiTheme: "modern-dark",
+		sidebarCollapsed: false,
+		workspaces: [],
+		activeWorkspaceId: "",
 	},
 });
+
+export function currentTheme(): UITheme {
+	return normalizeTheme(prefs.settings.uiTheme);
+}
 
 /** Objects per row in the object list (matches internal/settings). */
 export const LIST_COLUMNS = { min: 6, max: 12 };
@@ -41,20 +50,38 @@ export function listPanelWidth(columns: number): number {
 export async function loadPrefs(): Promise<void> {
 	try {
 		const settings = await SettingsService.Get();
-		prefs.settings = { ...settings, recent: settings.recent ?? [] };
+		const theme = normalizeTheme(settings.uiTheme);
+		prefs.settings = {
+			...settings,
+			uiTheme: theme,
+			recent: settings.recent ?? [],
+			workspaces: settings.workspaces ?? [],
+		};
+		applyTheme(theme);
 	} catch {
 		/* not running inside Wails: keep defaults */
+		applyTheme(currentTheme());
 	}
 }
 
-export async function savePrefs(change: Partial<Omit<Settings, "recent">>): Promise<void> {
+export async function savePrefs(change: Partial<Omit<Settings, "recent" | "workspaces">>): Promise<void> {
 	const next = { ...prefs.settings, ...change };
+	if (change.uiTheme !== undefined) {
+		next.uiTheme = normalizeTheme(change.uiTheme);
+		applyTheme(next.uiTheme as UITheme);
+	}
+	prefs.settings = next;
 	try {
 		await SettingsService.Update(next);
-		prefs.settings = next;
 	} catch (err) {
 		toast(errorMessage(err), "error");
 	}
+}
+
+export async function setUITheme(theme: UITheme): Promise<void> {
+	const normalized = normalizeTheme(theme);
+	applyTheme(normalized);
+	await savePrefs({ uiTheme: normalized });
 }
 
 export async function removeRecent(recent: Recent | null): Promise<void> {
