@@ -57,12 +57,24 @@ function loadMode(): ScaleMode {
 
 let systemScale = 0;
 let current: ScaleMode = "auto";
+let userScalePercent = 100;
 let rootZoom = 1;
 /** Work area of the window's screen in screen pixels, null outside Wails. */
 let screenArea: { width: number; height: number } | null = null;
 
 function currentZoom(): number {
-	return zoomFor(systemScale, current, fittingScale(screenArea, MIN_LAYOUT));
+	return zoomFor(systemScale, current, fittingScale(screenArea, MIN_LAYOUT)) * (userScalePercent / 100);
+}
+
+export function getUserScale(): number {
+	return userScalePercent;
+}
+
+export async function setUserScale(percent: number): Promise<void> {
+	const clamped = Math.round(Math.max(80, Math.min(160, percent || 100)));
+	if (clamped === userScalePercent) return;
+	userScalePercent = clamped;
+	await apply();
 }
 
 /** Whether the layout fits the window's screen at a whole scale. */

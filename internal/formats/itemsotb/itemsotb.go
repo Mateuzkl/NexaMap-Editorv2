@@ -235,6 +235,7 @@ func (it *Item) ClientID() uint16 { return it.u16(AttrClientID) }
 // has no client id.
 func (it *Item) Deprecated() bool { return it.Group == GroupDeprecated }
 
+func (it *Item) SetServerID(id uint16) { it.set(AttrServerID, u16(id)) }
 func (it *Item) SetClientID(id uint16) { it.set(AttrClientID, u16(id)) }
 
 func (it *Item) set(attrType byte, data []byte) {

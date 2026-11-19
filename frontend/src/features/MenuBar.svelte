@@ -6,7 +6,16 @@
 	import { app, openSettings } from "../lib/state/app.svelte";
 	import type { MenuEntry, MenuItem } from "../lib/menu.svelte";
 	import { editMenu, objectMenu, spriteMenu, toolsMenu } from "../lib/menus";
-	import { currentTheme, prefs, recentDir, setUITheme, shortPath } from "../lib/state/prefs.svelte";
+	import {
+		UI_SCALE,
+		currentTheme,
+		currentUIScale,
+		prefs,
+		recentDir,
+		setUIScale,
+		setUITheme,
+		shortPath,
+	} from "../lib/state/prefs.svelte";
 	import { isModernTheme, nextTheme, themeLabel } from "../lib/theme/theme.svelte";
 	import Icon from "../lib/ui/Icon.svelte";
 	import MenuEntries from "../lib/ui/MenuEntries.svelte";
@@ -117,10 +126,15 @@
 	let openMenu = $state<number | null>(null);
 	let scaleMode = $state(getMode());
 	const uiTheme = $derived(currentTheme());
+	const uiScale = $derived(currentUIScale());
 	const modern = $derived(isModernTheme(uiTheme));
 
 	function cycleTheme() {
 		void setUITheme(nextTheme(uiTheme));
+	}
+
+	function stepScale(delta: number) {
+		void setUIScale(uiScale + delta);
 	}
 
 	function pick(item: MenuItem) {
@@ -284,6 +298,25 @@
 		</div>
 	{/if}
 	<div class="spacer"></div>
+	<div class="zoom-ctl" role="group" aria-label="Interface zoom">
+		<button
+			type="button"
+			class="zbtn"
+			title="Decrease text & UI size"
+			disabled={uiScale <= UI_SCALE.min}
+			onclick={() => stepScale(-UI_SCALE.step)}>−</button
+		>
+		<button type="button" class="zval" title="Reset text & UI zoom to 100%" onclick={() => void setUIScale(100)}
+			>{uiScale}%</button
+		>
+		<button
+			type="button"
+			class="zbtn"
+			title="Increase text & UI size"
+			disabled={uiScale >= UI_SCALE.max}
+			onclick={() => stepScale(UI_SCALE.step)}>+</button
+		>
+	</div>
 	<button
 		type="button"
 		class="theme-switch"
@@ -348,9 +381,48 @@
 	}
 	.menu,
 	.toolbar,
+	.zoom-ctl,
 	.theme-switch,
 	.winctl {
 		--wails-draggable: no-drag;
+	}
+	.zoom-ctl {
+		display: inline-flex;
+		align-items: center;
+		margin-right: 4px;
+		border: 1px solid #333;
+		background: rgba(0, 0, 0, 0.25);
+		border-radius: 6px;
+		overflow: hidden;
+	}
+	.zbtn,
+	.zval {
+		font: inherit;
+		font-size: var(--fs-small);
+		color: var(--text-dim);
+		background: transparent;
+		border: 0;
+		height: 20px;
+		cursor: pointer;
+	}
+	.zbtn {
+		width: 20px;
+		padding: 0;
+		font-weight: 700;
+	}
+	.zval {
+		padding: 0 5px;
+		min-width: 36px;
+		text-align: center;
+	}
+	.zbtn:hover:not(:disabled),
+	.zval:hover {
+		color: var(--text-bright);
+		background: rgba(255, 255, 255, 0.08);
+	}
+	.zbtn:disabled {
+		opacity: 0.35;
+		cursor: default;
 	}
 	.theme-switch {
 		font: inherit;

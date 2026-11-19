@@ -90,6 +90,7 @@ func main() {
 			application.NewService(windows),
 			application.NewService(settingsService),
 			application.NewService(app.NewWorkspaceService(session, prefs)),
+			application.NewService(app.NewConverterService()),
 			application.NewService(app.NewMarketService(session, prefs)),
 			application.NewService(maps),
 			application.NewService(collabService),

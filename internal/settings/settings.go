@@ -87,10 +87,17 @@ type Settings struct {
 	MCPPort   int  `json:"mcpPort"`
 	// UITheme selects the visual shell: "classic", "modern-dark" or "modern-light".
 	UITheme          string             `json:"uiTheme"`
+	UIScale          int                `json:"uiScale,omitempty"`
 	SidebarCollapsed bool               `json:"sidebarCollapsed,omitempty"`
 	Workspaces       []WorkspaceProfile `json:"workspaces"`
 	ActiveWorkspace  string             `json:"activeWorkspaceId,omitempty"`
 }
+
+const (
+	MinUIScale     = 80
+	MaxUIScale     = 160
+	DefaultUIScale = 100
+)
 
 const (
 	MinListColumns     = 6
@@ -109,6 +116,7 @@ func Defaults() Settings {
 		ListColumns:     DefaultListColumns,
 		MCPPort:         DefaultMCPPort,
 		UITheme:         ThemeModernDark,
+		UIScale:         DefaultUIScale,
 		Recent:          []Recent{},
 		Workspaces:      []WorkspaceProfile{},
 		MarketShared:    map[string]string{},
@@ -134,6 +142,10 @@ func (s *Settings) normalize() {
 	default:
 		s.UITheme = ThemeModernDark
 	}
+	if s.UIScale == 0 {
+		s.UIScale = DefaultUIScale
+	}
+	s.UIScale = min(max(s.UIScale, MinUIScale), MaxUIScale)
 	if s.ListColumns == 0 {
 		s.ListColumns = DefaultListColumns
 	}

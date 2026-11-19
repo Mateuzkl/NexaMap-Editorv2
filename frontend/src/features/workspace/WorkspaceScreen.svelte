@@ -7,6 +7,7 @@
 	import { currentTheme, setUITheme } from "../../lib/state/prefs.svelte";
 	import { nextTheme, themeLabel } from "../../lib/theme/theme.svelte";
 	import ClientCard from "./ClientCard.svelte";
+	import CustomConverterPanel from "./CustomConverterPanel.svelte";
 	import DetectedMaps from "./DetectedMaps.svelte";
 	import RecentWorkspaces from "./RecentWorkspaces.svelte";
 	import ResourcesSummary from "./ResourcesSummary.svelte";
@@ -124,6 +125,7 @@
 						<RecentWorkspaces />
 					</div>
 				{:else if workspace.activeSection === "converters"}
+					<CustomConverterPanel />
 					<div class="ws-tools-grid">
 						<article class="ws-tool-card">
 							<h3>Compile As / Convert Client</h3>

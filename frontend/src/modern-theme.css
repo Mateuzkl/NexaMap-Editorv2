@@ -171,6 +171,24 @@
 	color: var(--ui-warning);
 	font-weight: 600;
 }
+:root[data-ui-theme^="modern"] .menubar .zoom-ctl {
+	border: 1px solid var(--ui-border);
+	background: var(--ui-surface);
+	border-radius: 99px;
+	margin-right: 4px;
+}
+:root[data-ui-theme^="modern"] .menubar .zbtn,
+:root[data-ui-theme^="modern"] .menubar .zval {
+	height: 24px;
+	color: var(--ui-muted);
+	font-size: 11.5px;
+	font-weight: 600;
+}
+:root[data-ui-theme^="modern"] .menubar .zbtn:hover:not(:disabled),
+:root[data-ui-theme^="modern"] .menubar .zval:hover {
+	color: var(--ui-text);
+	background: var(--ui-surface-raised);
+}
 :root[data-ui-theme^="modern"] .menubar .theme-switch {
 	height: 24px;
 	padding: 0 10px;
@@ -570,12 +588,19 @@
 }
 
 :root[data-ui-theme^="modern"] .t-tab {
+	height: auto;
+	min-height: 28px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	line-height: 1.2;
 	border: 1px solid transparent;
-	border-radius: 6px;
+	border-radius: 7px;
 	background: transparent;
 	color: var(--ui-muted);
 	text-shadow: none;
-	padding: 4px 10px;
+	padding: 4px 12px;
 }
 :root[data-ui-theme^="modern"] .t-tab:hover {
 	color: var(--ui-text);

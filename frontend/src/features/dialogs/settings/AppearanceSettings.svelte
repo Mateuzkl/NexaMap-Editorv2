@@ -1,8 +1,17 @@
 <script lang="ts">
-	import { currentTheme, prefs, savePrefs, setUITheme } from "../../../lib/state/prefs.svelte";
+	import {
+		UI_SCALE,
+		currentTheme,
+		currentUIScale,
+		prefs,
+		savePrefs,
+		setUIScale,
+		setUITheme,
+	} from "../../../lib/state/prefs.svelte";
 	import { isModernTheme, UI_THEMES, type UITheme } from "../../../lib/theme/theme.svelte";
 
 	const active = $derived(currentTheme());
+	const uiScale = $derived(currentUIScale());
 	const modern = $derived(isModernTheme(active));
 
 	function choose(theme: UITheme) {
@@ -70,6 +79,36 @@
 		</button>
 	{/each}
 </div>
+
+<h4>Text &amp; UI Zoom</h4>
+<div class="row zoom-row">
+	<button
+		type="button"
+		class="t-btn"
+		disabled={uiScale <= UI_SCALE.min}
+		onclick={() => void setUIScale(uiScale - UI_SCALE.step)}>−</button
+	>
+	<input
+		class="zoom-slider"
+		type="range"
+		min={UI_SCALE.min}
+		max={UI_SCALE.max}
+		step="5"
+		value={uiScale}
+		oninput={(event) => void setUIScale(Number(event.currentTarget.value))}
+	/>
+	<button
+		type="button"
+		class="t-btn"
+		disabled={uiScale >= UI_SCALE.max}
+		onclick={() => void setUIScale(uiScale + UI_SCALE.step)}>+</button
+	>
+	<span class="zoom-pct">{uiScale}%</span>
+	<button type="button" class="t-btn" disabled={uiScale === 100} onclick={() => void setUIScale(100)}>Reset</button>
+</div>
+<p class="t-label intro">
+	Adjust overall interface and font scale ({UI_SCALE.min}%–{UI_SCALE.max}%). Also available in the top bar.
+</p>
 
 {#if modern}
 	<h4>Modern Workspace</h4>
@@ -259,5 +298,19 @@
 		color: var(--text-dim);
 		font-size: 10px;
 		line-height: 1.3;
+	}
+	.zoom-row {
+		gap: 8px;
+		margin: 4px 0;
+	}
+	.zoom-slider {
+		flex: 1;
+		accent-color: var(--ui-primary, var(--gold));
+	}
+	.zoom-pct {
+		min-width: 40px;
+		text-align: right;
+		font-weight: 600;
+		color: var(--text-bright);
 	}
 </style>
