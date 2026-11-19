@@ -16,11 +16,36 @@ import (
 )
 
 const MaxRecent = 10
+const MaxWorkspaces = 20
 
 const (
 	BackgroundMagenta     = "magenta"
 	BackgroundTransparent = "transparent"
 )
+
+const (
+	ThemeClassic     = "classic"
+	ThemeModernDark  = "modern-dark"
+	ThemeModernLight = "modern-light"
+)
+
+const (
+	ItemIDsAuto   = "auto"
+	ItemIDsClient = "client"
+	ItemIDsServer = "server"
+)
+
+type WorkspaceProfile struct {
+	ID                 string `json:"id"`
+	Name               string `json:"name"`
+	ClientRoot         string `json:"clientRoot"`
+	ServerRoot         string `json:"serverRoot"`
+	SelectedClientPath string `json:"selectedClientPath,omitempty"`
+	SelectedOtbPath    string `json:"selectedOtbPath,omitempty"`
+	SelectedXmlPath    string `json:"selectedXmlPath,omitempty"`
+	PreferredItemIds   string `json:"preferredItemIds,omitempty"`
+	LastUsedAt         string `json:"lastUsedAt"`
+}
 
 type Recent struct {
 	// Format is "assets" for a Tibia 12+ asset folder (DatPath is the
@@ -60,6 +85,11 @@ type Settings struct {
 	// maps; MCPPort is its port on 127.0.0.1.
 	MCPServer bool `json:"mcpServer"`
 	MCPPort   int  `json:"mcpPort"`
+	// UITheme selects the visual shell: "classic", "modern-dark" or "modern-light".
+	UITheme          string             `json:"uiTheme"`
+	SidebarCollapsed bool               `json:"sidebarCollapsed,omitempty"`
+	Workspaces       []WorkspaceProfile `json:"workspaces"`
+	ActiveWorkspace  string             `json:"activeWorkspaceId,omitempty"`
 }
 
 const (
@@ -71,7 +101,20 @@ const (
 const DefaultMCPPort = 47800
 
 func Defaults() Settings {
-	return Settings{CheckUpdates: true, SheetBackground: BackgroundMagenta, ExportFormat: "png", ObjectFormat: "otobj", ListColumns: DefaultListColumns, MCPPort: DefaultMCPPort, Recent: []Recent{}, MarketShared: map[string]string{}, LastDirs: map[string]string{}, ItemsOTB: map[string]string{}}
+	return Settings{
+		CheckUpdates:    true,
+		SheetBackground: BackgroundMagenta,
+		ExportFormat:    "png",
+		ObjectFormat:    "otobj",
+		ListColumns:     DefaultListColumns,
+		MCPPort:         DefaultMCPPort,
+		UITheme:         ThemeModernDark,
+		Recent:          []Recent{},
+		Workspaces:      []WorkspaceProfile{},
+		MarketShared:    map[string]string{},
+		LastDirs:        map[string]string{},
+		ItemsOTB:        map[string]string{},
+	}
 }
 
 func (s *Settings) normalize() {
@@ -86,6 +129,11 @@ func (s *Settings) normalize() {
 	if s.ObjectFormat != "obd" {
 		s.ObjectFormat = "otobj"
 	}
+	switch s.UITheme {
+	case ThemeClassic, ThemeModernDark, ThemeModernLight:
+	default:
+		s.UITheme = ThemeModernDark
+	}
 	if s.ListColumns == 0 {
 		s.ListColumns = DefaultListColumns
 	}
@@ -95,6 +143,19 @@ func (s *Settings) normalize() {
 	}
 	if s.Recent == nil {
 		s.Recent = []Recent{}
+	}
+	if s.Workspaces == nil {
+		s.Workspaces = []WorkspaceProfile{}
+	}
+	for i := range s.Workspaces {
+		switch s.Workspaces[i].PreferredItemIds {
+		case ItemIDsAuto, ItemIDsClient, ItemIDsServer:
+		default:
+			s.Workspaces[i].PreferredItemIds = ItemIDsAuto
+		}
+	}
+	if len(s.Workspaces) > MaxWorkspaces {
+		s.Workspaces = s.Workspaces[:MaxWorkspaces]
 	}
 	if s.MarketShared == nil {
 		s.MarketShared = map[string]string{}
@@ -136,8 +197,14 @@ func Open(path string) (*Store, error) {
 		return store, err
 	}
 	loaded := Defaults()
+	// Existing settings.json files created before uiTheme was added stay on
+	// Classic so existing users keep their original look until they switch.
+	loaded.UITheme = ""
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		return store, fsutil.SetAside(path, err)
+	}
+	if loaded.UITheme == "" {
+		loaded.UITheme = ThemeClassic
 	}
 	loaded.normalize()
 	store.settings = loaded
@@ -149,18 +216,21 @@ func (st *Store) Get() Settings {
 	defer st.mu.Unlock()
 	snapshot := st.settings
 	snapshot.Recent = append([]Recent{}, st.settings.Recent...)
+	snapshot.Workspaces = append([]WorkspaceProfile{}, st.settings.Workspaces...)
 	snapshot.MarketShared = maps.Clone(st.settings.MarketShared)
 	snapshot.LastDirs = maps.Clone(st.settings.LastDirs)
 	snapshot.ItemsOTB = maps.Clone(st.settings.ItemsOTB)
 	return snapshot
 }
 
-// Update changes the preferences. The recent list, shared market entries
-// and dialog folders are kept as stored.
+// Update changes the preferences. The recent list, saved workspaces, shared
+// market entries and dialog folders are kept as stored.
 func (st *Store) Update(updated Settings) error {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	updated.Recent = st.settings.Recent
+	updated.Workspaces = st.settings.Workspaces
+	updated.ActiveWorkspace = st.settings.ActiveWorkspace
 	updated.MarketShared = st.settings.MarketShared
 	updated.LastDirs = st.settings.LastDirs
 	updated.ItemsOTB = st.settings.ItemsOTB
@@ -258,6 +328,80 @@ func (st *Store) SetItemsOTB(clientPath, otbPath string) error {
 	} else {
 		st.settings.ItemsOTB[fsutil.PathKey(clientPath)] = otbPath
 	}
+	return st.saveLocked()
+}
+
+func (st *Store) SaveWorkspace(profile WorkspaceProfile) ([]WorkspaceProfile, error) {
+	if profile.ID == "" {
+		return st.Get().Workspaces, nil
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if profile.LastUsedAt == "" {
+		profile.LastUsedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	next := []WorkspaceProfile{profile}
+	for _, existing := range st.settings.Workspaces {
+		if existing.ID != profile.ID {
+			next = append(next, existing)
+		}
+	}
+	st.settings.Workspaces = next
+	st.settings.ActiveWorkspace = profile.ID
+	st.settings.normalize()
+	err := st.saveLocked()
+	return append([]WorkspaceProfile{}, st.settings.Workspaces...), err
+}
+
+func (st *Store) RenameWorkspace(id, name string) ([]WorkspaceProfile, error) {
+	if id == "" || name == "" {
+		return st.Get().Workspaces, nil
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	changed := false
+	for i := range st.settings.Workspaces {
+		if st.settings.Workspaces[i].ID == id {
+			st.settings.Workspaces[i].Name = name
+			changed = true
+			break
+		}
+	}
+	if !changed {
+		return append([]WorkspaceProfile{}, st.settings.Workspaces...), nil
+	}
+	err := st.saveLocked()
+	return append([]WorkspaceProfile{}, st.settings.Workspaces...), err
+}
+
+func (st *Store) RemoveWorkspace(id string) ([]WorkspaceProfile, error) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	next := make([]WorkspaceProfile, 0, len(st.settings.Workspaces))
+	for _, existing := range st.settings.Workspaces {
+		if existing.ID != id {
+			next = append(next, existing)
+		}
+	}
+	st.settings.Workspaces = next
+	if st.settings.ActiveWorkspace == id {
+		if len(next) > 0 {
+			st.settings.ActiveWorkspace = next[0].ID
+		} else {
+			st.settings.ActiveWorkspace = ""
+		}
+	}
+	err := st.saveLocked()
+	return append([]WorkspaceProfile{}, st.settings.Workspaces...), err
+}
+
+func (st *Store) SetActiveWorkspace(id string) error {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.settings.ActiveWorkspace == id {
+		return nil
+	}
+	st.settings.ActiveWorkspace = id
 	return st.saveLocked()
 }
 

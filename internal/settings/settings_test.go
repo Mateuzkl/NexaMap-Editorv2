@@ -90,3 +90,100 @@ func TestLastDirs(t *testing.T) {
 		t.Fatalf("exportSprites = %q", got)
 	}
 }
+
+func TestUIThemeDefaultsAndMigration(t *testing.T) {
+	// New user gets Modern Dark by default.
+	fresh, err := Open(filepath.Join(t.TempDir(), "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fresh.Get().UITheme; got != ThemeModernDark {
+		t.Fatalf("new user uiTheme = %q, want %q", got, ThemeModernDark)
+	}
+
+	// Legacy settings.json without uiTheme migrates to Classic without losing data.
+	legacyPath := filepath.Join(t.TempDir(), "legacy.json")
+	legacyJSON := `{
+		"checkUpdates": false,
+		"listColumns": 9,
+		"recent": [{"datPath": "/old/Tibia.dat", "sprPath": "/old/Tibia.spr"}],
+		"marketShared": {"m1": "tok1"},
+		"lastDirs": {"openClient": "/old"},
+		"itemsOtb": {"/old/tibia.dat": "/srv/items.otb"}
+	}`
+	if err := os.WriteFile(legacyPath, []byte(legacyJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := Open(legacyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := legacy.Get()
+	if got.UITheme != ThemeClassic {
+		t.Fatalf("legacy uiTheme = %q, want %q", got.UITheme, ThemeClassic)
+	}
+	if got.CheckUpdates || got.ListColumns != 9 || len(got.Recent) != 1 || got.MarketShared["m1"] != "tok1" || got.LastDirs["openClient"] != "/old" {
+		t.Fatalf("legacy settings lost fields: %+v", got)
+	}
+
+	// Unknown theme value falls back safely.
+	badPath := filepath.Join(t.TempDir(), "bad.json")
+	if err := os.WriteFile(badPath, []byte(`{"uiTheme":"neon-invalid"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bad, err := Open(badPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := bad.Get().UITheme; got != ThemeModernDark {
+		t.Fatalf("invalid uiTheme fallback = %q, want %q", got, ThemeModernDark)
+	}
+}
+
+func TestWorkspacesPersistenceAndProtection(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	st, _ := Open(path)
+	p1 := WorkspaceProfile{ID: "ws-1", Name: "My 8.60", ClientRoot: "/c1", ServerRoot: "/s1", PreferredItemIds: ItemIDsServer}
+	p2 := WorkspaceProfile{ID: "ws-2", Name: "Canary", ClientRoot: "/c2", ServerRoot: "/s2", PreferredItemIds: "bogus"}
+	if _, err := st.SaveWorkspace(p1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SaveWorkspace(p2); err != nil {
+		t.Fatal(err)
+	}
+
+	// Update must preserve workspaces and active workspace.
+	s := st.Get()
+	s.UITheme = ThemeModernLight
+	s.Workspaces = nil
+	s.ActiveWorkspace = ""
+	if err := st.Update(s); err != nil {
+		t.Fatal(err)
+	}
+
+	re, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := re.Get()
+	if got.UITheme != ThemeModernLight {
+		t.Fatalf("uiTheme = %q", got.UITheme)
+	}
+	if len(got.Workspaces) != 2 || got.Workspaces[0].ID != "ws-2" || got.Workspaces[0].PreferredItemIds != ItemIDsAuto {
+		t.Fatalf("workspaces = %+v", got.Workspaces)
+	}
+	if got.ActiveWorkspace != "ws-2" {
+		t.Fatalf("activeWorkspace = %q", got.ActiveWorkspace)
+	}
+
+	if _, err := re.RenameWorkspace("ws-1", "TFS 8.60"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := re.RemoveWorkspace("ws-2"); err != nil {
+		t.Fatal(err)
+	}
+	after := re.Get()
+	if len(after.Workspaces) != 1 || after.Workspaces[0].Name != "TFS 8.60" || after.ActiveWorkspace != "ws-1" {
+		t.Fatalf("after rename/remove = %+v", after)
+	}
+}
