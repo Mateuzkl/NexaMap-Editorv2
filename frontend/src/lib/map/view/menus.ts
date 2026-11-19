@@ -244,6 +244,13 @@ export function mapContextMenu(position: Position, tileData: TileData | null, pi
 		{ label: `Inspect tile ${fmtPos(position)}`, action: () => mapCommands.inspect(position) },
 		{ label: "Copy position", action: () => copy(fmtPos(position)) },
 		{ label: "Play from here", keys: keyLabel("play"), action: () => mapCommands.play(position) },
+		{
+			label: "Hunt Forge (Gerar / Expandir aqui)…",
+			action: () => {
+				map.huntForgeAnchor = position;
+				map.dialog = "huntforge";
+			},
+		},
 	];
 	const readable = readableIndex(tileData);
 	if (readable >= 0) {

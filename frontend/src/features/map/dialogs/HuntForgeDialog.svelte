@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount } from "svelte";
+	import { onDestroy, onMount, tick } from "svelte";
 	import { DialogService, errorMessage } from "../../../lib/api";
 	import {
 		HuntForgeService,
@@ -38,6 +38,8 @@
 		{ value: HuntShapeStyle.StyleOrganic, label: "Orgânico" },
 	];
 
+	type ViewMode = "split" | "result" | "source";
+
 	let suggestions = $state<HuntSuggestion[]>([]);
 	let search = $state("");
 	let detecting = $state(false);
@@ -46,10 +48,10 @@
 	let placing = $state(false);
 
 	let selectedName = $state("");
-	let x1 = $state(Math.max(0, Math.round(map.cam.x) - 32));
-	let y1 = $state(Math.max(0, Math.round(map.cam.y) - 32));
-	let x2 = $state(Math.round(map.cam.x) + 32);
-	let y2 = $state(Math.round(map.cam.y) + 32);
+	let x1 = $state(Math.max(0, Math.round(map.cam.x) - 36));
+	let y1 = $state(Math.max(0, Math.round(map.cam.y) - 36));
+	let x2 = $state(Math.min(65535, Math.round(map.cam.x) + 36));
+	let y2 = $state(Math.min(65535, Math.round(map.cam.y) + 36));
 	let z = $state(map.cam.floor);
 
 	let analysisView = $state<HuntAnalysisView | null>(null);
@@ -65,12 +67,27 @@
 	let newSeedEachRun = $state(true);
 
 	let showMonsters = $state(true);
+	let viewMode = $state<ViewMode>("split");
 	let zoom = $state(1);
+
+	let srcNatW = $state(0);
+	let srcNatH = $state(0);
+	let resNatW = $state(0);
+	let resNatH = $state(0);
+
+	let srcCanvasEl = $state<HTMLDivElement | null>(null);
+	let resCanvasEl = $state<HTMLDivElement | null>(null);
+	let srcImgEl = $state<HTMLImageElement | null>(null);
 
 	let destX = $state(Math.max(100, Math.round(map.cam.x) + 120));
 	let destY = $state(Math.max(100, Math.round(map.cam.y)));
 	let destZ = $state(map.cam.floor);
 	let replaceTiles = $state(true);
+
+	// Interactive pan & Shift+drag visual crop state
+	let panning = $state(false);
+	let cropBox = $state<{ x: number; y: number; w: number; h: number; tiles: string } | null>(null);
+	let detachDrag: (() => void) | null = null;
 
 	const filtered = $derived.by(() => {
 		const q = search.trim().toLowerCase();
@@ -89,6 +106,147 @@
 			y2: Number(y2) || 0,
 			z1: Number(z) || 0,
 			z2: Number(z) || 0,
+		};
+	}
+
+	function clampZoom(v: number): number {
+		return Math.min(4, Math.max(0.15, Number(v.toFixed(3))));
+	}
+
+	async function fitPreview(prefer: "source" | "result" = "result") {
+		await tick();
+		const target =
+			prefer === "result" && resNatW > 0 && resCanvasEl
+				? { el: resCanvasEl, w: resNatW, h: resNatH }
+				: srcNatW > 0 && srcCanvasEl
+					? { el: srcCanvasEl, w: srcNatW, h: srcNatH }
+					: resNatW > 0 && resCanvasEl
+						? { el: resCanvasEl, w: resNatW, h: resNatH }
+						: null;
+		if (!target) return;
+		const availW = Math.max(160, target.el.clientWidth - 20);
+		const availH = Math.max(160, target.el.clientHeight - 20);
+		const fit = Math.min(availW / target.w, availH / target.h);
+		// Cap initial auto-fit at 2.5x so tiny hunts look crisp without blowing up excessively.
+		zoom = clampZoom(Math.min(2.5, fit));
+	}
+
+	function handleWheel(event: WheelEvent) {
+		event.preventDefault();
+		const el = event.currentTarget as HTMLDivElement;
+		const rect = el.getBoundingClientRect();
+		const mx = event.clientX - rect.left + el.scrollLeft;
+		const my = event.clientY - rect.top + el.scrollTop;
+		const factor = event.deltaY < 0 ? 1.18 : 1 / 1.18;
+		const prev = zoom;
+		const next = clampZoom(prev * factor);
+		if (next === prev) return;
+		zoom = next;
+		const ratio = next / prev;
+		requestAnimationFrame(() => {
+			el.scrollLeft = mx * ratio - (event.clientX - rect.left);
+			el.scrollTop = my * ratio - (event.clientY - rect.top);
+		});
+	}
+
+	function clearDragListeners() {
+		if (detachDrag) {
+			detachDrag();
+			detachDrag = null;
+		}
+		panning = false;
+		cropBox = null;
+	}
+
+	function startCanvasMouseDown(event: MouseEvent, kind: "source" | "result") {
+		if (event.button !== 0) return;
+		const el = event.currentTarget as HTMLDivElement;
+
+		// Shift + drag on Original preview visually crops (x1, y1 -> x2, y2) and re-analyzes.
+		if (kind === "source" && event.shiftKey && analysisView && srcImgEl) {
+			event.preventDefault();
+			clearDragListeners();
+			const img = srcImgEl;
+			const imgRect = img.getBoundingClientRect();
+			const canvasRect = el.getBoundingClientRect();
+			const reg = analysisView.region;
+			const cols = Math.max(1, analysisView.summary.width);
+			const rows = Math.max(1, analysisView.summary.height);
+
+			const clampPxX = (clientX: number) => Math.min(imgRect.right, Math.max(imgRect.left, clientX));
+			const clampPxY = (clientY: number) => Math.min(imgRect.bottom, Math.max(imgRect.top, clientY));
+
+			const startClientX = clampPxX(event.clientX);
+			const startClientY = clampPxY(event.clientY);
+
+			const computeBox = (curX: number, curY: number) => {
+				const lx = Math.min(startClientX, curX);
+				const rx = Math.max(startClientX, curX);
+				const ty = Math.min(startClientY, curY);
+				const by = Math.max(startClientY, curY);
+				const tx1 = Math.max(0, Math.min(cols - 1, Math.floor(((lx - imgRect.left) / imgRect.width) * cols)));
+				const tx2 = Math.max(tx1, Math.min(cols - 1, Math.floor(((rx - imgRect.left) / imgRect.width) * cols)));
+				const ty1 = Math.max(0, Math.min(rows - 1, Math.floor(((ty - imgRect.top) / imgRect.height) * rows)));
+				const ty2 = Math.max(ty1, Math.min(rows - 1, Math.floor(((by - imgRect.top) / imgRect.height) * rows)));
+				return {
+					x: lx - canvasRect.left + el.scrollLeft,
+					y: ty - canvasRect.top + el.scrollTop,
+					w: Math.max(2, rx - lx),
+					h: Math.max(2, by - ty),
+					tx1,
+					ty1,
+					tx2,
+					ty2,
+					tiles: `${tx2 - tx1 + 1}×${ty2 - ty1 + 1} tiles`,
+				};
+			};
+
+			const onMove = (ev: MouseEvent) => {
+				const box = computeBox(clampPxX(ev.clientX), clampPxY(ev.clientY));
+				cropBox = { x: box.x, y: box.y, w: box.w, h: box.h, tiles: box.tiles };
+			};
+
+			const onUp = (ev: MouseEvent) => {
+				const box = computeBox(clampPxX(ev.clientX), clampPxY(ev.clientY));
+				clearDragListeners();
+				if (box.tx2 - box.tx1 >= 4 && box.ty2 - box.ty1 >= 4) {
+					x1 = reg.x1 + box.tx1;
+					y1 = reg.y1 + box.ty1;
+					x2 = reg.x1 + box.tx2;
+					y2 = reg.y1 + box.ty2;
+					void analyzeCurrent();
+				}
+			};
+
+			window.addEventListener("mousemove", onMove);
+			window.addEventListener("mouseup", onUp);
+			detachDrag = () => {
+				window.removeEventListener("mousemove", onMove);
+				window.removeEventListener("mouseup", onUp);
+			};
+			return;
+		}
+
+		// Standard left-drag pans the preview smoothly.
+		event.preventDefault();
+		clearDragListeners();
+		panning = true;
+		const startX = event.clientX;
+		const startY = event.clientY;
+		const startLeft = el.scrollLeft;
+		const startTop = el.scrollTop;
+
+		const onMove = (ev: MouseEvent) => {
+			el.scrollLeft = startLeft - (ev.clientX - startX);
+			el.scrollTop = startTop - (ev.clientY - startY);
+		};
+		const onUp = () => clearDragListeners();
+
+		window.addEventListener("mousemove", onMove);
+		window.addEventListener("mouseup", onUp);
+		detachDrag = () => {
+			window.removeEventListener("mousemove", onMove);
+			window.removeEventListener("mouseup", onUp);
 		};
 	}
 
@@ -123,6 +281,26 @@
 		}
 	}
 
+	async function useAreaAround(cx: number, cy: number, cz: number, label: string) {
+		const half = 36;
+		x1 = Math.max(0, Math.round(cx) - half);
+		y1 = Math.max(0, Math.round(cy) - half);
+		x2 = Math.min(65535, Math.round(cx) + half);
+		y2 = Math.min(65535, Math.round(cy) + half);
+		z = cz;
+		selectedName = label;
+		destX = Math.min(65000, x2 + 24);
+		destY = y1;
+		destZ = cz;
+		await analyzeCurrent();
+	}
+
+	function setDestToCamera() {
+		destX = Math.max(0, Math.min(65535, Math.round(map.cam.x)));
+		destY = Math.max(0, Math.min(65535, Math.round(map.cam.y)));
+		destZ = map.cam.floor;
+	}
+
 	async function pickSuggestion(s: HuntSuggestion) {
 		selectedName = s.name;
 		x1 = s.region.x1;
@@ -148,6 +326,8 @@
 			);
 			analysisView = view;
 			generateView = null;
+			resNatW = 0;
+			resNatH = 0;
 		} catch (err) {
 			toast(errorMessage(err), "error");
 		} finally {
@@ -251,13 +431,66 @@
 		}
 	}
 
+	function onSourceImageLoad(event: Event) {
+		const img = event.currentTarget as HTMLImageElement;
+		srcNatW = img.naturalWidth;
+		srcNatH = img.naturalHeight;
+		if (!generateView) void fitPreview("source");
+	}
+
+	function onResultImageLoad(event: Event) {
+		const img = event.currentTarget as HTMLImageElement;
+		resNatW = img.naturalWidth;
+		resNatH = img.naturalHeight;
+		void fitPreview("result");
+	}
+
 	function close() {
 		map.dialog = null;
 	}
 
 	onMount(() => {
+		const anchor = map.huntForgeAnchor;
+		map.huntForgeAnchor = null;
+
 		void (async () => {
 			await detectHunts();
+
+			if (anchor) {
+				const hit = suggestions.find(
+					(s) =>
+						s.region.z1 === anchor.z &&
+						anchor.x >= s.region.x1 &&
+						anchor.x <= s.region.x2 &&
+						anchor.y >= s.region.y1 &&
+						anchor.y <= s.region.y2,
+				);
+				if (hit) {
+					await pickSuggestion(hit);
+					return;
+				}
+				if (map.active?.selection && map.activeId !== null) {
+					try {
+						const reg = await HuntForgeService.SelectionRegion(map.activeId);
+						if (
+							anchor.z >= reg.z1 &&
+							anchor.z <= reg.z2 &&
+							anchor.x >= reg.x1 &&
+							anchor.x <= reg.x2 &&
+							anchor.y >= reg.y1 &&
+							anchor.y <= reg.y2
+						) {
+							await useMapSelection();
+							return;
+						}
+					} catch {
+						/* fall back to area centered at anchor */
+					}
+				}
+				await useAreaAround(anchor.x, anchor.y, anchor.z, `Área (${anchor.x},${anchor.y},z${anchor.z})`);
+				return;
+			}
+
 			if (map.active?.selection) {
 				await useMapSelection();
 			} else if (suggestions.length > 0) {
@@ -267,11 +500,12 @@
 	});
 
 	onDestroy(() => {
+		clearDragListeners();
 		void HuntForgeService.Clear().catch(() => {});
 	});
 </script>
 
-<Dialog title="Hunt Forge — Gerador Procedural de Hunts" width={1140} onclose={close}>
+<Dialog title="Hunt Forge — Estúdio Procedural de Hunts" full={true} onclose={close}>
 	<div class="hf-layout">
 		<aside class="hf-left">
 			<div class="hf-bar">
@@ -283,14 +517,28 @@
 
 			<div class="hf-quick">
 				<button
-					class="t-btn primary full"
+					class="t-btn primary grow"
 					disabled={!map.active?.selection || analyzing}
 					title={map.active?.selection
 						? "Analisar a área atualmente selecionada no mapa"
 						: "Selecione uma área no mapa para usar este atalho"}
 					onclick={useMapSelection}
 				>
-					Usar seleção do mapa
+					Usar seleção
+				</button>
+				<button
+					class="t-btn"
+					disabled={analyzing}
+					title="Analisar uma área 72×72 centrada onde a câmera do mapa está agora"
+					onclick={() =>
+						useAreaAround(
+							map.cam.x,
+							map.cam.y,
+							map.cam.floor,
+							`Câmera (${Math.round(map.cam.x)},${Math.round(map.cam.y)},z${map.cam.floor})`,
+						)}
+				>
+					Área da câmera
 				</button>
 			</div>
 
@@ -300,7 +548,7 @@
 				{:else if filtered.length === 0}
 					<div class="hf-empty">
 						{suggestions.length === 0
-							? "Nenhuma hunt com ≥ 8 monstros encontrada. Use a área manual abaixo ou a seleção do mapa."
+							? "Nenhuma hunt com ≥ 8 monstros encontrada. Clique com o botão direito no mapa, use a seleção ou a área manual abaixo."
 							: "Nenhum resultado para o filtro."}
 					</div>
 				{:else}
@@ -352,47 +600,134 @@
 						</small>
 					{/if}
 				</span>
-				<button class="t-btn" onclick={() => (zoom = Math.max(0.5, +(zoom - 0.25).toFixed(2)))}>−</button>
+
+				<div class="hf-seg" role="group" aria-label="Modo de visualização">
+					<button
+						class="t-btn"
+						class:primary={viewMode === "split"}
+						onclick={() => {
+							viewMode = "split";
+							void fitPreview(generateView ? "result" : "source");
+						}}
+					>
+						Lado a lado
+					</button>
+					<button
+						class="t-btn"
+						class:primary={viewMode === "result"}
+						onclick={() => {
+							viewMode = "result";
+							void fitPreview("result");
+						}}
+					>
+						Só Resultado
+					</button>
+					<button
+						class="t-btn"
+						class:primary={viewMode === "source"}
+						onclick={() => {
+							viewMode = "source";
+							void fitPreview("source");
+						}}
+					>
+						Só Original
+					</button>
+				</div>
+
+				<button class="t-btn" onclick={() => (zoom = clampZoom(zoom / 1.25))} title="Diminuir zoom">−</button>
 				<span class="hf-zoom">{Math.round(zoom * 100)}%</span>
-				<button class="t-btn" onclick={() => (zoom = Math.min(3, +(zoom + 0.25).toFixed(2)))}>+</button>
+				<button class="t-btn" onclick={() => (zoom = clampZoom(zoom * 1.25))} title="Aumentar zoom">+</button>
+				<button class="t-btn" onclick={() => void fitPreview(viewMode === "source" ? "source" : "result")}>
+					Ajustar
+				</button>
 				<button class="t-btn" onclick={() => (zoom = 1)}>100%</button>
 				<button class="t-btn" class:primary={showMonsters} onclick={toggleMonsters}>Monstros</button>
 			</div>
 
-			<div class="hf-views">
-				<div class="hf-pane t-panel">
-					<div class="hf-pane-head">Original</div>
-					<div class="hf-canvas">
-						{#if analyzing}
-							<div class="hf-empty">Analisando e renderizando…</div>
-						{:else if analysisView?.preview}
-							<img
-								src={analysisView.preview}
-								alt="Original hunt"
-								style="transform: scale({zoom}); transform-origin: top left;"
-							/>
-						{:else}
-							<div class="hf-empty">Escolha uma hunt à esquerda ou selecione no mapa.</div>
-						{/if}
+			<div class="hf-views" class:single={viewMode !== "split"}>
+				{#if viewMode !== "result"}
+					<div class="hf-pane t-panel">
+						<div class="hf-pane-head">
+							<span>Original</span>
+							<span class="hf-hint">Arraste: mover · Roda: zoom · Shift+arrastar: recortar</span>
+						</div>
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<div
+							class="hf-canvas"
+							class:panning
+							bind:this={srcCanvasEl}
+							onwheel={handleWheel}
+							onmousedown={(e) => startCanvasMouseDown(e, "source")}
+						>
+							{#if analyzing}
+								<div class="hf-empty">Analisando e renderizando sprites…</div>
+							{:else if analysisView?.preview}
+								<div class="hf-stage">
+									<img
+										bind:this={srcImgEl}
+										src={analysisView.preview}
+										alt="Original hunt"
+										draggable="false"
+										onload={onSourceImageLoad}
+										style={srcNatW > 0
+											? `width:${Math.max(1, Math.round(srcNatW * zoom))}px;height:${Math.max(1, Math.round(srcNatH * zoom))}px;`
+											: undefined}
+									/>
+								</div>
+								{#if cropBox}
+									<div
+										class="hf-crop"
+										style="left:{cropBox.x}px;top:{cropBox.y}px;width:{cropBox.w}px;height:{cropBox.h}px;"
+									>
+										<span>{cropBox.tiles}</span>
+									</div>
+								{/if}
+							{:else}
+								<div class="hf-empty">
+									Escolha uma hunt à esquerda, selecione uma área no mapa ou clique com o botão
+									direito no mapa.
+								</div>
+							{/if}
+						</div>
 					</div>
-				</div>
+				{/if}
 
-				<div class="hf-pane t-panel">
-					<div class="hf-pane-head">Resultado</div>
-					<div class="hf-canvas">
-						{#if generating}
-							<div class="hf-empty">Gerando hunt…</div>
-						{:else if generateView?.preview}
-							<img
-								src={generateView.preview}
-								alt="Generated hunt"
-								style="transform: scale({zoom}); transform-origin: top left;"
-							/>
-						{:else}
-							<div class="hf-empty">Clique em <b>Gerar Hunt</b> à direita para visualizar.</div>
-						{/if}
+				{#if viewMode !== "source"}
+					<div class="hf-pane t-panel">
+						<div class="hf-pane-head">
+							<span>Resultado</span>
+							<span class="hf-hint">Arraste: mover · Roda: zoom</span>
+						</div>
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<div
+							class="hf-canvas"
+							class:panning
+							bind:this={resCanvasEl}
+							onwheel={handleWheel}
+							onmousedown={(e) => startCanvasMouseDown(e, "result")}
+						>
+							{#if generating}
+								<div class="hf-empty">Gerando hunt e renderizando sprites…</div>
+							{:else if generateView?.preview}
+								<div class="hf-stage">
+									<img
+										src={generateView.preview}
+										alt="Generated hunt"
+										draggable="false"
+										onload={onResultImageLoad}
+										style={resNatW > 0
+											? `width:${Math.max(1, Math.round(resNatW * zoom))}px;height:${Math.max(1, Math.round(resNatH * zoom))}px;`
+											: undefined}
+									/>
+								</div>
+							{:else}
+								<div class="hf-empty">
+									Ajuste o modo à direita e clique em <b>Gerar Hunt</b> para visualizar aqui.
+								</div>
+							{/if}
+						</div>
 					</div>
-				</div>
+				{/if}
 			</div>
 		</section>
 
@@ -509,7 +844,17 @@
 			</div>
 
 			<div class="hf-box">
-				<h3>Inserir ou Exportar</h3>
+				<div class="hf-box-head">
+					<h3>Inserir ou Exportar</h3>
+					<button
+						class="t-btn"
+						type="button"
+						onclick={setDestToCamera}
+						title="Definir destino X, Y, Z para a posição atual da câmera no mapa"
+					>
+						Usar câmera
+					</button>
+				</div>
 				<div class="hf-grid3">
 					<label>X<input class="t-input" type="number" bind:value={destX} /></label>
 					<label>Y<input class="t-input" type="number" bind:value={destY} /></label>
@@ -531,7 +876,8 @@
 
 	{#snippet footer()}
 		<span class="t-label grow">
-			Hunt Forge integrado ao NexaMap Editor · funciona com mapas ServerID, ClientID e 32-bit
+			Hunt Forge integrado ao NexaMap Editor · funciona com mapas ServerID, ClientID e 32-bit · botão direito no
+			mapa abre direto na área
 		</span>
 		<button class="t-btn" onclick={close}>Fechar</button>
 	{/snippet}
@@ -540,10 +886,12 @@
 <style>
 	.hf-layout {
 		display: grid;
-		grid-template-columns: 245px 1fr 295px;
+		grid-template-columns: 260px 1fr 315px;
 		gap: 10px;
-		height: min(74vh, 660px);
-		min-height: 480px;
+		flex: 1;
+		min-height: 0;
+		height: 100%;
+		padding-top: 4px;
 	}
 	.hf-left,
 	.hf-center,
@@ -558,12 +906,10 @@
 		overflow-y: auto;
 		padding-right: 2px;
 	}
-	.hf-bar {
-		display: flex;
-		gap: 6px;
-	}
+	.hf-bar,
 	.hf-quick {
 		display: flex;
+		gap: 6px;
 	}
 	.full {
 		width: 100%;
@@ -614,6 +960,12 @@
 		border: 1px solid var(--border, #2c3139);
 		border-radius: 8px;
 	}
+	.hf-box-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 6px;
+	}
 	.hf-box h3 {
 		margin: 0;
 		font-size: 11px;
@@ -658,10 +1010,16 @@
 	.hf-vbar {
 		display: flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: 6px;
+	}
+	.hf-seg {
+		display: inline-flex;
+		gap: 3px;
 	}
 	.hf-vtitle {
 		flex: 1;
+		min-width: 140px;
 		font-weight: 600;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -673,7 +1031,7 @@
 	}
 	.hf-zoom {
 		font-size: 11px;
-		min-width: 38px;
+		min-width: 40px;
 		text-align: center;
 		font-variant-numeric: tabular-nums;
 	}
@@ -684,6 +1042,9 @@
 		grid-template-columns: 1fr 1fr;
 		gap: 8px;
 	}
+	.hf-views.single {
+		grid-template-columns: 1fr;
+	}
 	.hf-pane {
 		display: flex;
 		flex-direction: column;
@@ -692,13 +1053,27 @@
 		overflow: hidden;
 	}
 	.hf-pane-head {
-		padding: 5px 8px;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		padding: 6px 10px;
 		font-size: 11px;
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		border-bottom: 1px solid var(--border, #2c3139);
-		opacity: 0.8;
+		opacity: 0.85;
+	}
+	.hf-hint {
+		font-weight: 400;
+		text-transform: none;
+		letter-spacing: normal;
+		font-size: 10.5px;
+		opacity: 0.65;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.hf-canvas {
 		flex: 1;
@@ -706,11 +1081,43 @@
 		overflow: auto;
 		background: #0b0e14;
 		position: relative;
-		padding: 6px;
+		padding: 8px;
+		cursor: grab;
+		user-select: none;
+	}
+	.hf-canvas.panning {
+		cursor: grabbing;
+	}
+	.hf-stage {
+		min-width: 100%;
+		min-height: 100%;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 	}
 	.hf-canvas img {
 		display: block;
 		image-rendering: pixelated;
+		pointer-events: none;
+	}
+	.hf-crop {
+		position: absolute;
+		border: 2px dashed #a855f7;
+		background: rgba(168, 85, 247, 0.2);
+		pointer-events: none;
+		box-sizing: border-box;
+	}
+	.hf-crop span {
+		position: absolute;
+		top: -20px;
+		left: 0;
+		font-size: 10.5px;
+		font-weight: 600;
+		padding: 1px 6px;
+		border-radius: 4px;
+		background: #7c4df2;
+		color: #fff;
+		white-space: nowrap;
 	}
 	.hf-empty {
 		height: 100%;
@@ -748,7 +1155,7 @@
 		gap: 4px;
 	}
 	.hf-modes button {
-		padding: 5px 6px;
+		padding: 6px 6px;
 		font-size: 11.5px;
 		border-radius: 6px;
 		border: 1px solid var(--border, #2c3139);

@@ -324,8 +324,8 @@ func renderTemplatePreview(tpl *huntforge.Template, floor int, opened *openMap, 
 		return "", 1, nil
 	}
 
-	// For compact hunts (<= 96x96 tiles) with loaded client sprites, render real game sprites!
-	if w*h <= 96*96 && data != nil && data.project != nil {
+	// Render real client sprites up to 160x160 tiles (stitching <=128x128 blocks when needed).
+	if w <= 160 && h <= 160 && data != nil && data.project != nil {
 		tempMap := tpl.ToMap(otmap.Position{X: 0, Y: 0, Z: 0}, opened.editor.Map)
 		scene := &maprender.Scene{
 			Map:          tempMap,
@@ -344,11 +344,14 @@ func renderTemplatePreview(tpl *huntforge.Template, floor int, opened *openMap, 
 		if showMonsters {
 			opts.ViewFlags = maprender.ViewCreatures
 		}
-		if img, err := maprender.RenderImage(scene, image.Rect(0, 0, w, h), floor, opts); err == nil {
+		if img, err := renderTiledSpriteImage(scene, w, h, floor, opts); err == nil {
 			tilePx := scene.SpriteSize
-			// Downscale very large sprite renders so PNG transfer stays snappy (< 1280px).
-			if img.Bounds().Dx() > 1280 || img.Bounds().Dy() > 1280 {
-				img, tilePx = downsampleNRGBA(img, tilePx, 1280)
+			if showMonsters {
+				drawMissingCreatureBadges(img, tpl, floor, tilePx, data)
+			}
+			// Downscale smoothly so large sprite renders stay fast (<= 1600px).
+			if img.Bounds().Dx() > 1600 || img.Bounds().Dy() > 1600 {
+				img, tilePx = downsampleNRGBA(img, tilePx, 1600)
 			}
 			pngBytes, err := imaging.EncodePNG(img)
 			if err != nil {
@@ -358,13 +361,13 @@ func renderTemplatePreview(tpl *huntforge.Template, floor int, opened *openMap, 
 		}
 	}
 
-	// Fast high-contrast minimap/topology renderer for large hunts (works at any size).
-	scale := 4
+	// Fast high-contrast minimap/topology renderer for huge hunts (> 160x160 tiles).
+	scale := 5
 	if max(w, h) > 220 {
-		scale = 3
+		scale = 4
 	}
 	if max(w, h) > 360 {
-		scale = 2
+		scale = 3
 	}
 	img := renderMinimapTemplate(tpl, floor, opened.editor, opened.editor.Items, scale, showMonsters)
 	pngBytes, err := imaging.EncodePNG(img)
@@ -372,6 +375,67 @@ func renderTemplatePreview(tpl *huntforge.Template, floor int, opened *openMap, 
 		return "", 0, err
 	}
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes), scale, nil
+}
+
+func renderTiledSpriteImage(scene *maprender.Scene, w, h, floor int, opts maprender.GeometryOptions) (*image.NRGBA, error) {
+	if w*h <= maprender.MaxImageTiles {
+		return maprender.RenderImage(scene, image.Rect(0, 0, w, h), floor, opts)
+	}
+	spriteSize := scene.SpriteSize
+	full := image.NewNRGBA(image.Rect(0, 0, w*spriteSize, h*spriteSize))
+	for i := 3; i < len(full.Pix); i += 4 {
+		full.Pix[i] = 0xFF
+	}
+	const block = 96
+	for y0 := 0; y0 < h; y0 += block {
+		y1 := min(h, y0+block)
+		for x0 := 0; x0 < w; x0 += block {
+			x1 := min(w, x0+block)
+			part, err := maprender.RenderImage(scene, image.Rect(x0, y0, x1, y1), floor, opts)
+			if err != nil {
+				return nil, err
+			}
+			pw, ph := part.Bounds().Dx(), part.Bounds().Dy()
+			dx0, dy0 := x0*spriteSize, y0*spriteSize
+			for py := 0; py < ph; py++ {
+				srcRow := part.Pix[py*part.Stride : py*part.Stride+pw*4]
+				dstOff := (dy0+py)*full.Stride + dx0*4
+				copy(full.Pix[dstOff:dstOff+pw*4], srcRow)
+			}
+		}
+	}
+	return full, nil
+}
+
+func drawMissingCreatureBadges(img *image.NRGBA, tpl *huntforge.Template, floor, tilePx int, data *mapData) {
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	dot := color.NRGBA{255, 86, 118, 255}
+	rim := color.NRGBA{15, 10, 20, 255}
+	rad := max(3, tilePx/5)
+	for _, pc := range tpl.Creatures {
+		if pc.Z != floor {
+			continue
+		}
+		if _, known := data.outfit(pc.Creature.Name); known {
+			continue
+		}
+		cx := pc.X*tilePx + tilePx/2
+		cy := pc.Y*tilePx + tilePx/2
+		for dy := -rad - 1; dy <= rad+1; dy++ {
+			for dx := -rad - 1; dx <= rad+1; dx++ {
+				px, py := cx+dx, cy+dy
+				if px < 0 || py < 0 || px >= w || py >= h {
+					continue
+				}
+				d2 := dx*dx + dy*dy
+				if d2 <= rad*rad {
+					img.SetNRGBA(px, py, dot)
+				} else if d2 <= (rad+1)*(rad+1) {
+					img.SetNRGBA(px, py, rim)
+				}
+			}
+		}
+	}
 }
 
 func renderMinimapTemplate(tpl *huntforge.Template, floor int, editor *mapedit.Editor, db *otitems.DB, scale int, showMonsters bool) *image.NRGBA {
@@ -439,10 +503,29 @@ func downsampleNRGBA(src *image.NRGBA, tilePx, maxDim int) (*image.NRGBA, int) {
 	nw, nh := max(1, bw/factor), max(1, bh/factor)
 	dst := image.NewNRGBA(image.Rect(0, 0, nw, nh))
 	for y := 0; y < nh; y++ {
-		sy := y * factor
+		sy0 := y * factor
 		for x := 0; x < nw; x++ {
-			sx := x * factor
-			dst.SetNRGBA(x, y, src.NRGBAAt(sx, sy))
+			sx0 := x * factor
+			var r, g, b, a, count uint32
+			for dy := 0; dy < factor && sy0+dy < bh; dy++ {
+				rowOff := (sy0+dy)*src.Stride + sx0*4
+				for dx := 0; dx < factor && sx0+dx < bw; dx++ {
+					off := rowOff + dx*4
+					r += uint32(src.Pix[off])
+					g += uint32(src.Pix[off+1])
+					b += uint32(src.Pix[off+2])
+					a += uint32(src.Pix[off+3])
+					count++
+				}
+			}
+			if count > 0 {
+				dst.SetNRGBA(x, y, color.NRGBA{
+					R: uint8(r / count),
+					G: uint8(g / count),
+					B: uint8(b / count),
+					A: uint8(a / count),
+				})
+			}
 		}
 	}
 	return dst, max(1, tilePx/factor)
