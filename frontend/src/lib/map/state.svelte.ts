@@ -104,6 +104,17 @@ const DEFAULT_VIEW: ViewOptions = {
 	ambientLight: 15,
 };
 
+function loadFavorites(): BrushSel[] {
+	const raw = loadJson<unknown[]>(FAVORITES_KEY, []);
+	return raw.filter(
+		(entry): entry is BrushSel =>
+			!!entry &&
+			typeof entry === "object" &&
+			typeof (entry as BrushSel).kind === "string" &&
+			typeof (entry as BrushSel).label === "string",
+	);
+}
+
 class MapState {
 	/** Not remembered: each start shows the start screen, which picks the editor. */
 	mode = $state<EditorMode>("objects");
@@ -132,7 +143,7 @@ class MapState {
 	fill = $state(false);
 	reroll = $state(0);
 	recentBrushes = $state<BrushSel[]>([]);
-	favorites = $state<BrushSel[]>(loadJson(FAVORITES_KEY, []));
+	favorites = $state<BrushSel[]>(loadFavorites());
 	/** Item the library should show and scroll to (set by picking a brush from the map). */
 	revealItem = $state<{ id: number } | null>(null);
 	/** A brush picked from the map: the library shows its tab. */
@@ -396,18 +407,20 @@ export function isBrushActive(brush: BrushSel): boolean {
 }
 
 export function isFavoriteBrush(brush: BrushSel): boolean {
+	const list = Array.isArray(map.favorites) ? map.favorites : [];
 	const key = brushKey(brush);
-	return map.favorites.some((fav) => brushKey(fav) === key);
+	return list.some((fav) => brushKey(fav) === key);
 }
 
 export function toggleFavoriteBrush(brush: BrushSel): boolean {
+	const list = Array.isArray(map.favorites) ? map.favorites : [];
 	const key = brushKey(brush);
-	const exists = map.favorites.some((fav) => brushKey(fav) === key);
+	const exists = list.some((fav) => brushKey(fav) === key);
 	if (exists) {
-		map.favorites = map.favorites.filter((fav) => brushKey(fav) !== key);
+		map.favorites = list.filter((fav) => brushKey(fav) !== key);
 		return false;
 	}
-	map.favorites = [brush, ...map.favorites].slice(0, 64);
+	map.favorites = [brush, ...list].slice(0, 64);
 	return true;
 }
 

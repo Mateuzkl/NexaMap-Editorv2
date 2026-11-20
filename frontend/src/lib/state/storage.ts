@@ -34,7 +34,14 @@ export function readJson(key: string): unknown {
 export function loadJson<T>(key: string, fallback: T): T {
 	try {
 		const stored = readStored(key);
-		if (stored) return { ...fallback, ...JSON.parse(stored) } as T;
+		if (!stored) return fallback;
+		const parsed: unknown = JSON.parse(stored);
+		if (Array.isArray(fallback)) {
+			return (Array.isArray(parsed) ? parsed : fallback) as T;
+		}
+		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+			return { ...fallback, ...parsed } as T;
+		}
 	} catch {
 		/* unreadable */
 	}
