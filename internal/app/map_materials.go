@@ -218,6 +218,109 @@ func (ms *MapService) LearnBorder(id int) (*mapedit.LearnedBorderReport, error) 
 	return report, err
 }
 
+// LearnBordersFromMap scans every floor of the open map to automatically
+// discover 12-edge auto-borders for custom or unconfigured grounds.
+func (ms *MapService) LearnBordersFromMap(id int, onlyMissing bool) (*mapedit.WholeMapBorderReport, error) {
+	var report *mapedit.WholeMapBorderReport
+	err := ms.withMapRead(id, func(opened *openMap, _ *mapData) error {
+		report = opened.editor.LearnBordersFromMap(onlyMissing)
+		return nil
+	})
+	return report, err
+}
+
+// SaveLearnedBordersBatch persists multiple auto-learned borders and their
+// ground brushes in a single atomic save so Auto-Bordering works immediately.
+func (ms *MapService) SaveLearnedBordersBatch(entries []mapedit.AutoLearnedBorder) (saved int, err error) {
+	if len(entries) == 0 {
+		return 0, errors.New("select at least one learned border to save")
+	}
+	err = ms.editMaterials(func(materialSet *materials.Materials) error {
+		for _, entry := range entries {
+			cleanEdges := map[string]uint16{}
+			for edge, eid := range entry.Edges {
+				if eid != 0 {
+					cleanEdges[edge] = eid
+				}
+			}
+			if len(cleanEdges) == 0 {
+				continue
+			}
+			borderID := materialSet.SaveBorder(materials.Border{Edges: cleanEdges})
+			saved++
+			brushName := strings.TrimSpace(entry.Name)
+			if brushName == "" && len(entry.GroundIDs) > 0 {
+				brushName = fmt.Sprintf("ground_%d", entry.GroundIDs[0])
+			}
+			if brushName == "" || len(entry.GroundIDs) == 0 {
+				continue
+			}
+			align := entry.Align
+			if align != "inner" {
+				align = "outer"
+			}
+			toTarget := strings.TrimSpace(entry.ToTarget)
+			if toTarget == "" {
+				if align == "inner" {
+					toTarget = "none"
+				} else {
+					toTarget = "all"
+				}
+			}
+			zOrder := entry.ZOrder
+			if zOrder <= 0 {
+				zOrder = 3500
+			}
+			var brush materials.Brush
+			oldName := ""
+			if existing := materialSet.Brush(brushName); existing != nil {
+				brush = *existing
+				oldName = existing.Name
+			} else {
+				brush = materials.Brush{
+					Name:   brushName,
+					Type:   materials.TypeGround,
+					Look:   entry.GroundIDs[0],
+					ZOrder: zOrder,
+				}
+				for _, gid := range entry.GroundIDs {
+					if gid != 0 {
+						brush.Items = append(brush.Items, materials.Chance{ID: gid, Chance: 100})
+					}
+				}
+			}
+			if brush.Look == 0 && len(entry.GroundIDs) > 0 {
+				brush.Look = entry.GroundIDs[0]
+			}
+			brush.Borders = append([]materials.BorderRule{{Align: align, To: toTarget, Border: borderID}}, brush.Borders...)
+			if err := materialSet.SaveBrush(oldName, brush, []string{"Auto-Learned Borders"}); err != nil {
+				return err
+			}
+		}
+		if saved == 0 {
+			return errors.New("no valid border edges to save")
+		}
+		return nil
+	})
+	return saved, err
+}
+
+// ExportLearnedBordersBatchXML writes all selected learned borders, ground
+// brushes, and an Auto-Learned Borders tileset into one ready-to-use RME XML.
+func (ms *MapService) ExportLearnedBordersBatchXML(path string, entries []mapedit.AutoLearnedBorder, startBorderID uint32) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", errors.New("no output file selected")
+	}
+	if len(entries) == 0 {
+		return "", errors.New("select at least one learned border to export")
+	}
+	xmlText := mapedit.FormatMultiLearnedBordersXML(entries, startBorderID)
+	if err := fsutil.WriteAtomic(path, []byte(xmlText)); err != nil {
+		return "", err
+	}
+	return filepath.Clean(path), nil
+}
+
 // SaveLearnedBorder persists a learned border and attaches it to a ground brush
 // (creating or updating the brush in the "Learned Borders" collection) so it is
 // immediately active with auto-bordering on the map.

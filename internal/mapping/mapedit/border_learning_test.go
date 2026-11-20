@@ -119,4 +119,73 @@ func TestRemoveDuplicatesAndFindEmptySpawns(t *testing.T) {
 	if len(cands) != 2 || cands[0].Category != "Floor" || cands[0].ID != 100 || cands[1].ID != 300 || cands[1].Count != 2 {
 		t.Fatalf("quick replace candidates = %+v", cands)
 	}
+	if got := ed.ClassifyItem(100); got != "Floor" {
+		t.Fatalf("ClassifyItem(100) = %q, want Floor", got)
+	}
+}
+
+func TestLearnBordersFromMapAndBatchXML(t *testing.T) {
+	items := otitems.NewDB(otitems.ModeOTB, []*otitems.Type{
+		{ID: 700, ClientID: 700, Name: "rubin lava", Flags: otitems.FlagGround},
+		{ID: 701, ClientID: 701, Name: "rubin lava", Flags: otitems.FlagGround},
+		{ID: 200, ClientID: 200, Name: "dirt", Flags: otitems.FlagGround},
+		{ID: 800, ClientID: 800, Name: "lava border n", TopOrder: borderTopOrder},
+		{ID: 801, ClientID: 801, Name: "lava border e", TopOrder: borderTopOrder},
+		{ID: 802, ClientID: 802, Name: "lava border s", TopOrder: borderTopOrder},
+		{ID: 803, ClientID: 803, Name: "lava border w", TopOrder: borderTopOrder},
+	})
+	m := otmap.New(64, 64)
+	for y := uint16(10); y <= 16; y++ {
+		for x := uint16(10); x <= 16; x++ {
+			m.SetTile(otmap.Position{X: x, Y: y, Z: 7}, &otmap.Tile{Ground: otmap.Item{ID: 200}})
+		}
+	}
+	// 3x3 island mixing TWO unconfigured ground IDs (700 & 701) sharing the same borders!
+	for y := uint16(12); y <= 14; y++ {
+		for x := uint16(12); x <= 14; x++ {
+			gid := uint16(700)
+			if (x+y)%2 == 1 {
+				gid = 701
+			}
+			m.SetTile(otmap.Position{X: x, Y: y, Z: 7}, &otmap.Tile{Ground: otmap.Item{ID: gid}})
+		}
+	}
+	add := func(x, y, id uint16) {
+		pos := otmap.Position{X: x, Y: y, Z: 7}
+		tile := m.Tile(pos)
+		tile.Items = append(tile.Items, otmap.Item{ID: id})
+		m.SetTile(pos, tile)
+	}
+	add(12, 11, 800)
+	add(13, 11, 800)
+	add(14, 11, 800) // N (neighbor S is lava -> wait: tile at y=11 has lava to its S! Wait: let's match borderPieces!)
+	add(15, 12, 801)
+	add(15, 13, 801)
+	add(15, 14, 801) // E
+	add(12, 15, 802)
+	add(13, 15, 802)
+	add(14, 15, 802) // S
+	add(11, 12, 803)
+	add(11, 13, 803)
+	add(11, 14, 803) // W
+
+	ed := New(m, items, NewBrushes(items, materials.New()))
+	report := ed.LearnBordersFromMap(true)
+	if report.MissingGrounds < 2 {
+		t.Fatalf("expected missing grounds >= 2, got %d", report.MissingGrounds)
+	}
+	if len(report.Borders) == 0 {
+		t.Fatalf("expected at least 1 auto-learned border from whole map")
+	}
+	b := report.Borders[0]
+	if len(b.GroundIDs) != 2 {
+		t.Fatalf("expected ground variations 700 & 701 to cluster into 1 family, got %v", b.GroundIDs)
+	}
+	if b.AssignedCount < 4 {
+		t.Fatalf("expected >= 4 assigned edges, got %d (%#v)", b.AssignedCount, b.Edges)
+	}
+	xml := FormatMultiLearnedBordersXML(report.Borders, 10000)
+	if !strings.Contains(xml, `<border id="10000">`) || !strings.Contains(xml, `<tileset name="Auto-Learned Borders">`) {
+		t.Fatalf("unexpected batch XML:\n%s", xml)
+	}
 }

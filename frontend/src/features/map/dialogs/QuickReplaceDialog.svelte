@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
 	import { errorMessage } from "../../../lib/api";
-	import { MapService, type QuickReplaceCandidate } from "../../../lib/map/data/api";
+	import { MapService, type QuickReplaceCandidate, type QuickReplaceChoice } from "../../../lib/map/data/api";
 	import { edit, map } from "../../../lib/map/state.svelte";
 	import { toast } from "../../../lib/state/app.svelte";
 	import Dialog from "../../../lib/ui/Dialog.svelte";
@@ -34,11 +34,19 @@
 	let autoBorder = $state(false);
 	let queue = $state<ReplaceRule[]>([]);
 
+	let sameCategory = $state(true);
+	let choiceQuery = $state("");
+	let choicesLoading = $state(false);
+	let choices = $state<QuickReplaceChoice[]>([]);
+
 	let mounted = true;
 	let scanSeq = 0;
+	let choiceSeq = 0;
+	let choiceTimer: ReturnType<typeof setTimeout> | null = null;
 
 	onDestroy(() => {
 		mounted = false;
+		if (choiceTimer) clearTimeout(choiceTimer);
 	});
 
 	const categoryCounts = $derived.by(() => {
@@ -79,6 +87,48 @@
 		return map.items?.name(id) || `Item #${id}`;
 	}
 
+	async function loadChoices(source: QuickReplaceCandidate | null) {
+		const id = map.activeId;
+		if (id === null || !source) {
+			choices = [];
+			return;
+		}
+		const seq = ++choiceSeq;
+		choicesLoading = true;
+		try {
+			const res = await MapService.QuickReplaceChoices(
+				id,
+				source.id,
+				source.category,
+				sameCategory,
+				choiceQuery,
+				180,
+			);
+			if (!mounted || seq !== choiceSeq) return;
+			choices = res ?? [];
+		} catch {
+			if (!mounted || seq !== choiceSeq) return;
+			choices = [];
+		} finally {
+			if (mounted && seq === choiceSeq) choicesLoading = false;
+		}
+	}
+
+	function scheduleChoices(immediate = false) {
+		if (choiceTimer) {
+			clearTimeout(choiceTimer);
+			choiceTimer = null;
+		}
+		if (immediate) {
+			void loadChoices(selected);
+			return;
+		}
+		choiceTimer = setTimeout(() => {
+			choiceTimer = null;
+			void loadChoices(selected);
+		}, 120);
+	}
+
 	function selectCandidate(c: QuickReplaceCandidate) {
 		selectedId = c.id;
 		const existing = queueByFrom.get(c.id);
@@ -89,6 +139,7 @@
 			removeMode = false;
 			targetId = 0;
 		}
+		void loadChoices(c);
 	}
 
 	async function scan(anchorId = 0) {
@@ -114,6 +165,7 @@
 				selectedId = 0;
 				targetId = 0;
 				removeMode = false;
+				choices = [];
 			}
 		} catch (err) {
 			if (!mounted || seq !== scanSeq) return;
@@ -128,6 +180,11 @@
 		if (inSelection === nextInSelection) return;
 		inSelection = nextInSelection;
 		void scan();
+	}
+
+	function pickChoice(choice: QuickReplaceChoice) {
+		removeMode = false;
+		targetId = choice.id;
 	}
 
 	function addOrUpdateQueue() {
@@ -146,7 +203,6 @@
 			queue = [...queue, rule];
 		}
 
-		// Advance to the next unqueued item in the filtered list for fast multi-item setup.
 		const nextUnqueued = filtered.find((c) => c.id !== selected.id && !queue.some((r) => r.fromId === c.id));
 		if (nextUnqueued) {
 			selectCandidate(nextUnqueued);
@@ -200,6 +256,12 @@
 		void runReplace(fromIds, toIds, `Batch replace (${queue.length} rule${queue.length === 1 ? "" : "s"})`);
 	}
 
+	function scoreTone(score: number): string {
+		if (score >= 80) return "hi";
+		if (score >= 60) return "mid";
+		return "low";
+	}
+
 	function close() {
 		map.quickReplaceAnchorItem = 0;
 		map.dialog = null;
@@ -212,7 +274,7 @@
 	});
 </script>
 
-<Dialog title="Quick Replace Items" width={920} onclose={close}>
+<Dialog title="Quick Replace Items" width={1040} onclose={close}>
 	<div class="qr-wrap">
 		<div class="qr-topbar">
 			<div class="qr-scope" role="group" aria-label="Replace scope">
@@ -300,10 +362,9 @@
 				<div class="qr-right-pane">
 					{#if selected}
 						<div class="qr-box">
-							<h4>Before → After</h4>
-							<div class="qr-preview">
+							<div class="qr-preview-row">
 								<div class="qr-card">
-									<ItemIcon id={selected.id} size={48} crisp />
+									<ItemIcon id={selected.id} size={42} crisp />
 									<div class="qr-card-title" title={selected.name}>{selected.name}</div>
 									<div class="qr-card-sub">
 										#{selected.id} · {selected.category} · ×{selected.count.toLocaleString()}
@@ -316,29 +377,26 @@
 										<div class="qr-card-title">Remove item</div>
 										<div class="qr-card-sub">Deletes all occurrences</div>
 									{:else if targetId > 0}
-										<ItemIcon id={targetId} size={48} crisp />
+										<ItemIcon id={targetId} size={42} crisp />
 										<div class="qr-card-title" title={itemName(targetId)}>{itemName(targetId)}</div>
 										<div class="qr-card-sub">#{targetId}</div>
 									{:else}
 										<div class="qr-dash">?</div>
-										<div class="qr-card-title">Pick target item</div>
+										<div class="qr-card-title">Pick target below</div>
 										<div class="qr-card-sub">or mark to remove</div>
 									{/if}
 								</div>
 							</div>
 
-							<div class="qr-picker-row">
+							<div class="qr-controls-row">
 								<ItemPicker
 									value={removeMode ? 0 : targetId}
-									placeholder="Choose replacement item or type ID…"
+									placeholder="Type ID or pick…"
 									onchange={(id) => {
 										removeMode = false;
 										targetId = id;
 									}}
 								/>
-							</div>
-
-							<div class="qr-quick-actions">
 								<button
 									class="t-btn"
 									class:danger-on={removeMode}
@@ -347,7 +405,7 @@
 										if (removeMode) targetId = 0;
 									}}
 								>
-									{removeMode ? "✕ Removing item" : "Remove item"}
+									{removeMode ? "✕ Removing" : "Remove item"}
 								</button>
 								{#if activeBrushItemId > 0 && activeBrushItemId !== selected.id}
 									<button
@@ -358,7 +416,7 @@
 										}}
 										title="Use currently selected brush/item (#{activeBrushItemId})"
 									>
-										Use current brush (#{activeBrushItemId})
+										Brush #{activeBrushItemId}
 									</button>
 								{/if}
 								<button
@@ -371,16 +429,67 @@
 								>
 									Clear
 								</button>
-							</div>
-
-							<div class="qr-apply-row">
+								<span class="grow"></span>
 								<button class="t-btn" disabled={!canApplySingle} onclick={addOrUpdateQueue}>
-									{queueByFrom.has(selected.id) ? "Update in batch queue" : "+ Add to batch queue"}
+									{queueByFrom.has(selected.id) ? "Update queue" : "+ Add to queue"}
 								</button>
 								<button class="t-btn primary" disabled={!canApplySingle} onclick={replaceSingleNow}>
-									{applying ? "Replacing…" : "Replace this now"}
+									{applying ? "Replacing…" : "Replace now"}
 								</button>
 							</div>
+						</div>
+
+						<div class="qr-box qr-choices-box">
+							<div class="qr-choices-head">
+								<h4>
+									Matching {sameCategory ? selected.category : "All"} Suggestions ({choices.length})
+								</h4>
+								<label class="qr-check">
+									<input
+										type="checkbox"
+										bind:checked={sameCategory}
+										onchange={() => scheduleChoices(true)}
+									/>
+									<span>Same category ({selected.category})</span>
+								</label>
+								<input
+									class="t-input qr-choice-search"
+									type="search"
+									bind:value={choiceQuery}
+									oninput={() => scheduleChoices(false)}
+									placeholder="Search {sameCategory ? selected.category : 'any'} item…"
+								/>
+							</div>
+
+							{#if choicesLoading}
+								<div class="qr-empty-small">Finding matching {selected.category} items…</div>
+							{:else if choices.length === 0}
+								<div class="qr-empty-small">
+									No matching {sameCategory ? selected.category : ""} items found. Try unchecking
+									<b>Same category</b>.
+								</div>
+							{:else}
+								<div class="qr-grid">
+									{#each choices as choice (choice.id)}
+										<button
+											class="qr-cell"
+											class:on={!removeMode && targetId === choice.id}
+											onclick={() => pickChoice(choice)}
+											ondblclick={() => {
+												pickChoice(choice);
+												addOrUpdateQueue();
+											}}
+											title="{choice.name} (#{choice.id}) · {choice.category}{choice.brush
+												? ` · ${choice.brush}`
+												: ''} · {choice.score}% match (double-click to queue)"
+										>
+											<span class="qr-pct {scoreTone(choice.score)}">{choice.score}%</span>
+											<ItemIcon id={choice.id} size={32} crisp />
+											<span class="qr-cell-id">{choice.id}</span>
+										</button>
+									{/each}
+								</div>
+							{/if}
 						</div>
 					{/if}
 
@@ -396,8 +505,8 @@
 
 						{#if queue.length === 0}
 							<div class="qr-queue-empty">
-								Queue multiple items here to replace everything in one single undoable (Ctrl+Z) step, or
-								use <b>Replace this now</b> for instant swaps.
+								Click a suggestion above and press <b>Replace now</b>, or double-click /
+								<b>+ Add to queue</b> to swap multiple items in one undoable (Ctrl+Z) batch.
 							</div>
 						{:else}
 							<div class="qr-queue-list">
@@ -444,7 +553,7 @@
 	{#snippet footer()}
 		<label class="qr-check">
 			<input type="checkbox" bind:checked={autoBorder} disabled={applying} />
-			<span>Redo borders after replace</span>
+			<span>Auto-border &amp; walls after replace</span>
 		</label>
 		<span class="grow"></span>
 		<button class="t-btn primary" disabled={applying || queue.length === 0} onclick={applyBatchQueue}>
@@ -458,7 +567,7 @@
 	.qr-wrap {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 8px;
 	}
 	.qr-topbar {
 		display: flex;
@@ -527,9 +636,9 @@
 	}
 	.qr-main {
 		display: grid;
-		grid-template-columns: 330px 1fr;
-		gap: 12px;
-		min-height: 410px;
+		grid-template-columns: 310px 1fr;
+		gap: 10px;
+		min-height: 480px;
 	}
 	.qr-list-pane,
 	.qr-right-pane {
@@ -549,7 +658,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 3px;
-		max-height: 430px;
+		max-height: 510px;
 		overflow-y: auto;
 		padding: 4px;
 		border: 1px solid var(--border, #2c3139);
@@ -622,8 +731,8 @@
 	.qr-box {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		padding: 10px;
+		gap: 7px;
+		padding: 9px;
 		border: 1px solid var(--border, #2c3139);
 		border-radius: 8px;
 		background: rgba(0, 0, 0, 0.16);
@@ -635,20 +744,20 @@
 		letter-spacing: 0.06em;
 		opacity: 0.8;
 	}
-	.qr-preview {
+	.qr-preview-row {
 		display: grid;
 		grid-template-columns: 1fr auto 1fr;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 	}
 	.qr-card {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 4px;
-		min-height: 104px;
-		padding: 8px;
+		gap: 3px;
+		min-height: 84px;
+		padding: 6px;
 		border-radius: 7px;
 		border: 1px solid var(--border, #2c3139);
 		background: rgba(0, 0, 0, 0.25);
@@ -664,7 +773,7 @@
 		opacity: 0.75;
 	}
 	.qr-card-title {
-		font-size: 12px;
+		font-size: 11.5px;
 		font-weight: 500;
 		max-width: 100%;
 		white-space: nowrap;
@@ -672,47 +781,106 @@
 		text-overflow: ellipsis;
 	}
 	.qr-card-sub {
-		font-size: 10.5px;
+		font-size: 10px;
 		opacity: 0.7;
 	}
 	.qr-arrow {
-		font-size: 20px;
+		font-size: 18px;
 		opacity: 0.65;
 	}
 	.qr-rm-icon {
-		font-size: 28px;
-		line-height: 48px;
+		font-size: 24px;
+		line-height: 42px;
 		color: #f87171;
 	}
 	.qr-dash {
-		font-size: 26px;
-		line-height: 48px;
+		font-size: 22px;
+		line-height: 42px;
 		opacity: 0.4;
 	}
-	.qr-picker-row {
+	.qr-controls-row {
 		display: flex;
-		gap: 6px;
-		align-items: center;
-	}
-	.qr-quick-actions,
-	.qr-apply-row {
-		display: flex;
-		gap: 6px;
+		gap: 5px;
 		flex-wrap: wrap;
 		align-items: center;
-	}
-	.qr-apply-row {
-		justify-content: flex-end;
-		padding-top: 2px;
 	}
 	.danger-on {
 		border-color: rgba(239, 68, 68, 0.7) !important;
 		background: rgba(239, 68, 68, 0.2) !important;
 		color: #fecaca !important;
 	}
-	.qr-queue-box {
+	.qr-choices-head {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.qr-choice-search {
 		flex: 1;
-		min-height: 130px;
+		min-width: 140px;
+	}
+	.qr-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+		gap: 4px;
+		max-height: 196px;
+		overflow-y: auto;
+		padding: 3px;
+		border: 1px solid var(--border, #2c3139);
+		border-radius: 6px;
+		background: rgba(0, 0, 0, 0.22);
+	}
+	.qr-cell {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 2px;
+		padding: 13px 2px 3px;
+		border-radius: 5px;
+		border: 1px solid transparent;
+		background: rgba(255, 255, 255, 0.03);
+		color: inherit;
+		cursor: pointer;
+	}
+	.qr-cell:hover {
+		border-color: rgba(255, 255, 255, 0.2);
+		background: rgba(255, 255, 255, 0.08);
+	}
+	.qr-cell.on {
+		border-color: var(--accent, #7c4df2);
+		background: color-mix(in srgb, var(--accent, #7c4df2) 25%, transparent);
+	}
+	.qr-pct {
+		position: absolute;
+		top: 2px;
+		right: 3px;
+		font-size: 9px;
+		font-weight: 600;
+		padding: 0 3px;
+		border-radius: 3px;
+		line-height: 1.25;
+	}
+	.qr-pct.hi {
+		background: rgba(34, 197, 94, 0.24);
+		color: #86efac;
+	}
+	.qr-pct.mid {
+		background: rgba(234, 179, 8, 0.24);
+		color: #fde047;
+	}
+	.qr-pct.low {
+		background: rgba(255, 255, 255, 0.09);
+		color: rgba(255, 255, 255, 0.7);
+	}
+	.qr-cell-id {
+		font-size: 9.5px;
+		opacity: 0.72;
+		font-variant-numeric: tabular-nums;
+	}
+	.qr-queue-box {
+		min-height: 100px;
 	}
 	.qr-queue-head {
 		display: flex;
@@ -731,16 +899,16 @@
 		text-decoration: underline;
 	}
 	.qr-queue-empty {
-		font-size: 12px;
+		font-size: 11.5px;
 		opacity: 0.72;
-		line-height: 1.45;
-		padding: 10px 4px;
+		line-height: 1.4;
+		padding: 4px 2px;
 	}
 	.qr-queue-list {
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		max-height: 155px;
+		max-height: 115px;
 		overflow-y: auto;
 	}
 	.qr-rule {
@@ -768,7 +936,7 @@
 		text-align: left;
 	}
 	.qr-rule-name {
-		max-width: 115px;
+		max-width: 120px;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -795,8 +963,8 @@
 	.qr-check {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
-		font-size: 12px;
+		gap: 5px;
+		font-size: 11.5px;
 		cursor: pointer;
 	}
 	.qr-empty {
@@ -805,10 +973,10 @@
 		opacity: 0.8;
 	}
 	.qr-empty-small {
-		padding: 18px 8px;
+		padding: 16px 8px;
 		text-align: center;
 		font-size: 12px;
-		opacity: 0.7;
+		opacity: 0.72;
 	}
 	.qr-err {
 		color: #f87171;

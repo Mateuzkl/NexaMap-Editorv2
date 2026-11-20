@@ -41,6 +41,7 @@ export type {
 } from "../../../../bindings/github.com/nekiro/ots-creator/internal/app/models";
 export type {
 	ActionInfo,
+	AutoLearnedBorder,
 	Clip,
 	ClipTile,
 	CreaturePatch,
@@ -61,10 +62,12 @@ export type {
 	PlacedItem,
 	Properties,
 	QuickReplaceCandidate,
+	QuickReplaceChoice,
 	Rect,
 	Settings as EditorSettings,
 	Statistics,
 	TilePatch,
+	WholeMapBorderReport,
 } from "../../../../bindings/github.com/nekiro/ots-creator/internal/mapping/mapedit/models";
 export type {
 	Attr,

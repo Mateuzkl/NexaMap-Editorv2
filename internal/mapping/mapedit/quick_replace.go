@@ -17,6 +17,26 @@ type QuickReplaceCandidate struct {
 	Count    int    `json:"count"`
 }
 
+// QuickReplaceChoice is a suggested replacement target item scored against the
+// source item's category, item flags, brush family, and sprite appearance.
+type QuickReplaceChoice struct {
+	ID       uint16 `json:"id"`
+	Name     string `json:"name"`
+	Category string `json:"category"`
+	Brush    string `json:"brush,omitempty"`
+	Score    int    `json:"score"`
+}
+
+// ClassifyItem returns the Quick Replace architectural category for an item ID
+// (Floor, Border, Wall, Door, Carpet, Table, Doodad, or Item).
+func (e *Editor) ClassifyItem(id uint16) string {
+	isGround := false
+	if it := e.itemType(id); it != nil && it.IsGround() {
+		isGround = true
+	}
+	return e.classifyPlacedItem(isGround, id)
+}
+
 var quickReplaceCategoryOrder = map[string]int{
 	"Floor":  0,
 	"Border": 1,

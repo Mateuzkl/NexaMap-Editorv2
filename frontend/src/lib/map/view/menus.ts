@@ -177,8 +177,19 @@ export function mapMenus(): { label: string; items: MenuEntry[] }[] {
 				{ label: "Map tools…", action: () => (map.dialog = "tools"), disabled: noMap },
 				{
 					label: "Learn border from selection…",
-					action: () => (map.dialog = "learnBorder"),
+					action: () => {
+						map.learnBorderMode = "selection";
+						map.dialog = "learnBorder";
+					},
 					disabled: noSelection,
+				},
+				{
+					label: "Auto-learn all missing borders from map…",
+					action: () => {
+						map.learnBorderMode = "map";
+						map.dialog = "learnBorder";
+					},
+					disabled: noMap,
 				},
 				{
 					label: "Hunt Forge (Generate / Expand Hunt)…",
@@ -394,7 +405,14 @@ export function mapContextMenu(position: Position, tileData: TileData | null, pi
 				]
 			: []),
 		"-",
-		{ label: "Learn Border from Selection…", action: () => (map.dialog = "learnBorder"), disabled: noSelection },
+		{
+			label: "Learn Border from Selection…",
+			action: () => {
+				map.learnBorderMode = "selection";
+				map.dialog = "learnBorder";
+			},
+			disabled: noSelection,
+		},
 		{ label: "Save Terrain as Brush…", action: mapCommands.saveTerrainAsBrush, disabled: noSelection },
 		{ label: "Save Terrain as .otbm…", action: mapCommands.exportSelectionOTBM, disabled: noSelection },
 		"-",

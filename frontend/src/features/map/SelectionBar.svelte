@@ -61,7 +61,10 @@
 		<button
 			class="txt"
 			title="Learn a 12-edge auto-border from the selected tiles"
-			onclick={() => (map.dialog = "learnBorder")}>Learn border…</button
+			onclick={() => {
+				map.learnBorderMode = "selection";
+				map.dialog = "learnBorder";
+			}}>Learn border…</button
 		>
 		<button class="txt" title="Save selected terrain as a reusable brush" onclick={mapCommands.saveTerrainAsBrush}
 			>Save terrain…</button

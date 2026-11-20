@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Snippet } from "svelte";
+	import { onDestroy, type Snippet } from "svelte";
 	import { backdrop, pop } from "./motion";
 
 	let {
@@ -19,6 +19,64 @@
 	} = $props();
 
 	let box: HTMLDivElement;
+	let dx = $state(0);
+	let dy = $state(0);
+	let dragging = $state(false);
+
+	let dragState: {
+		startX: number;
+		startY: number;
+		originDx: number;
+		originDy: number;
+		minDx: number;
+		maxDx: number;
+		minDy: number;
+		maxDy: number;
+	} | null = null;
+
+	function onPointerMove(event: PointerEvent) {
+		if (!dragState) return;
+		const nextX = dragState.originDx + (event.clientX - dragState.startX);
+		const nextY = dragState.originDy + (event.clientY - dragState.startY);
+		dx = Math.max(dragState.minDx, Math.min(dragState.maxDx, nextX));
+		dy = Math.max(dragState.minDy, Math.min(dragState.maxDy, nextY));
+	}
+
+	function stopDrag() {
+		if (!dragState) return;
+		dragState = null;
+		dragging = false;
+		window.removeEventListener("pointermove", onPointerMove);
+		window.removeEventListener("pointerup", stopDrag);
+		window.removeEventListener("pointercancel", stopDrag);
+	}
+
+	function startDrag(event: PointerEvent) {
+		if (event.button !== 0 || !box) return;
+		const target = event.target as HTMLElement | null;
+		if (target?.closest("button, input, select, a")) return;
+		event.preventDefault();
+		const rect = box.getBoundingClientRect();
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+		const keepVisibleX = Math.min(120, Math.max(60, rect.width * 0.25));
+		dragState = {
+			startX: event.clientX,
+			startY: event.clientY,
+			originDx: dx,
+			originDy: dy,
+			minDx: dx + (keepVisibleX - rect.right),
+			maxDx: dx + (vw - keepVisibleX - rect.left),
+			minDy: dy + (8 - rect.top),
+			maxDy: dy + (vh - 44 - rect.top),
+		};
+		dragging = true;
+		window.addEventListener("pointermove", onPointerMove);
+		window.addEventListener("pointerup", stopDrag);
+		window.addEventListener("pointercancel", stopDrag);
+	}
+
+	onDestroy(stopDrag);
 
 	$effect(() => {
 		// A disabled control cannot take the focus: without one that can, the
@@ -35,6 +93,13 @@
 			onclose();
 		}
 	}
+
+	const dialogStyle = $derived.by(() => {
+		const parts: string[] = [];
+		if (!full) parts.push(`width:${width}px`);
+		if (dx !== 0 || dy !== 0) parts.push(`transform:translate3d(${dx}px, ${dy}px, 0)`);
+		return parts.length ? parts.join(";") : undefined;
+	});
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -42,20 +107,24 @@
 	class="overlay"
 	transition:backdrop|global
 	{onkeydown}
-	onmousedown={(event) => event.target === event.currentTarget && onclose()}
+	onmousedown={(event) => event.target === event.currentTarget && !dragging && onclose()}
 >
 	<div
 		class="t-window dialog"
 		class:full
+		class:dragging
 		transition:pop|global
-		style={full ? undefined : `width:${width}px`}
+		style={dialogStyle}
 		bind:this={box}
 		tabindex="-1"
 		role="dialog"
 		aria-modal="true"
 		aria-label={title}
 	>
-		<div class="t-window-title">{title}</div>
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="t-window-title drag-handle" title="Drag to move window" onpointerdown={startDrag}>
+			{title}
+		</div>
 		<div class="content">
 			{@render children()}
 		</div>
@@ -88,6 +157,14 @@
 		max-height: none;
 		display: flex;
 		flex-direction: column;
+	}
+	.drag-handle {
+		cursor: grab;
+		user-select: none;
+		touch-action: none;
+	}
+	.dialog.dragging .drag-handle {
+		cursor: grabbing;
 	}
 	.content {
 		overflow: auto;

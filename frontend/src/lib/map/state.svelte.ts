@@ -169,6 +169,8 @@ class MapState {
 	huntForgeAnchor = $state.raw<Position | null>(null);
 	/** Item ID to pre-select when opening Quick Replace Items from a tile right-click. */
 	quickReplaceAnchorItem = $state<number>(0);
+	/** Initial tab mode when opening Learn Border dialog ("selection" or "map"). */
+	learnBorderMode = $state<"selection" | "map">("selection");
 	/** Item shown in the text dialog (index among the tile items, ground excluded). */
 	textItem = $state<{ pos: Position; index: number } | null>(null);
 	editBrush = $state<{ name: string; type: string } | null>(null);
