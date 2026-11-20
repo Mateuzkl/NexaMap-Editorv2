@@ -106,6 +106,14 @@ export function mapMenus(): { label: string; items: MenuEntry[] }[] {
 					action: () => mapCommands.find({ ...selectionScope(), replace: true }),
 					disabled: noMap,
 				},
+				{
+					label: "Quick Replace Items (Multi-Item)…",
+					action: () => {
+						map.quickReplaceAnchorItem = 0;
+						map.dialog = "quickReplace";
+					},
+					disabled: noMap,
+				},
 				{ label: "Go to anything…", keys: keyLabel("palette"), action: () => mapCommands.commandPalette() },
 				"-",
 				{
@@ -359,12 +367,14 @@ export function mapContextMenu(position: Position, tileData: TileData | null, pi
 		}
 	}
 	const favTarget = picks.click ?? picks.raw ?? map.brush;
-	const quickReplaceIds = top ? [top] : undefined;
 	out.push(
 		"-",
 		{
-			label: top && items ? `Quick Replace Items (${items.name(top)})…` : "Quick Replace Items…",
-			action: () => mapCommands.find({ ids: quickReplaceIds, ...selectionScope(), replace: true }),
+			label: "Quick Replace Items…",
+			action: () => {
+				map.quickReplaceAnchorItem = top || 0;
+				map.dialog = "quickReplace";
+			},
 		},
 		...(favTarget
 			? [

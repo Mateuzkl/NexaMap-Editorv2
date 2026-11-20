@@ -114,4 +114,9 @@ func TestRemoveDuplicatesAndFindEmptySpawns(t *testing.T) {
 	if len(after.Items) != 2 || after.Items[1].ActionID() != 1234 {
 		t.Fatalf("items after dedup = %+v", after.Items)
 	}
+
+	cands := ed.CollectQuickReplaceCandidates(false)
+	if len(cands) != 2 || cands[0].Category != "Floor" || cands[0].ID != 100 || cands[1].ID != 300 || cands[1].Count != 2 {
+		t.Fatalf("quick replace candidates = %+v", cands)
+	}
 }

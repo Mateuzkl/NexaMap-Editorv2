@@ -60,6 +60,7 @@ export type {
 	LearnedGroundFamily,
 	PlacedItem,
 	Properties,
+	QuickReplaceCandidate,
 	Rect,
 	Settings as EditorSettings,
 	Statistics,

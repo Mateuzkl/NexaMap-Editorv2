@@ -114,6 +114,20 @@ func (ms *MapService) Replace(id int, from, to []uint16, inSelection bool) (MapC
 	})
 }
 
+// QuickReplaceCandidates returns every distinct item placed in the selection
+// (or the whole map) with its category and occurrence count.
+func (ms *MapService) QuickReplaceCandidates(id int, inSelection bool) ([]mapedit.QuickReplaceCandidate, error) {
+	var out []mapedit.QuickReplaceCandidate
+	err := ms.withMapRead(id, func(opened *openMap, _ *mapData) error {
+		out = opened.editor.CollectQuickReplaceCandidates(inSelection)
+		return nil
+	})
+	if out == nil {
+		out = []mapedit.QuickReplaceCandidate{}
+	}
+	return out, err
+}
+
 // SetSpawnTimes sets the spawn time of the creatures in the selection or
 // the whole map; a non-empty name limits it to creatures of that name.
 // Count is the number of creatures changed.

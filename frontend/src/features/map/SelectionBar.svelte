@@ -46,6 +46,14 @@
 		>
 		<button
 			class="txt"
+			title="Scan and quick-replace multiple items in the selection"
+			onclick={() => {
+				map.quickReplaceAnchorItem = 0;
+				map.dialog = "quickReplace";
+			}}>Quick replace…</button
+		>
+		<button
+			class="txt"
 			title="Save the selection as a decoration brush"
 			onclick={() => ((map.editBrush = { name: "", type: "fromSelection" }), (map.dialog = "brush"))}
 			>Make brush…</button
