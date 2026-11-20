@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/nekiro/ots-creator/internal/core/otitems"
 	"github.com/nekiro/ots-creator/internal/core/thing"
+	"github.com/nekiro/ots-creator/internal/mapping/mapedit"
 )
 
 type ItemTable struct {
@@ -22,13 +23,13 @@ type ItemTable struct {
 
 func (ms *MapService) Items() (table ItemTable, err error) {
 	err = ms.withData(func(data *mapData) error {
-		table = itemTable(data.items)
+		table = itemTable(data.items, data.brushes)
 		return nil
 	})
 	return table, err
 }
 
-func itemTable(items *otitems.DB) ItemTable {
+func itemTable(items *otitems.DB, brushes *mapedit.Brushes) ItemTable {
 	table := ItemTable{Mode: string(items.Mode), MaxID: items.MaxID32(), Flagbits: map[string]uint32{}}
 	for name, flag := range otitems.FlagNames() {
 		table.Flagbits[name] = uint32(flag)
@@ -40,7 +41,18 @@ func itemTable(items *otitems.DB) ItemTable {
 		table.Tops = append(table.Tops, uint16(item.TopOrder))
 		table.Minimap = append(table.Minimap, item.MinimapColor)
 		table.Names = append(table.Names, item.Name)
-		table.Kinds = append(table.Kinds, uint16(item.Kind))
+		kind := item.Kind
+		if kind == otitems.KindNone {
+			switch {
+			case item.IsDoor() || (brushes != nil && item.EffectiveID() <= 0xFFFF && brushes.IsDoor(item.ID)):
+				kind = otitems.KindDoor
+			case item.IsTeleport():
+				kind = otitems.KindTeleport
+			case item.IsContainer():
+				kind = otitems.KindContainer
+			}
+		}
+		table.Kinds = append(table.Kinds, uint16(kind))
 		table.Speeds = append(table.Speeds, item.Speed)
 	})
 	return table

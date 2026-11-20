@@ -6,6 +6,7 @@
 	import { app, toast } from "../../lib/state/app.svelte";
 	import { readJson, saveJson } from "../../lib/state/storage";
 	import { MapService, SpawnFormat, type CreatureType, type PaletteBrush } from "../../lib/map/data/api";
+	import { ITEM_KIND, TOP_ORDER } from "../../lib/map/data/items";
 	import { mapCommands } from "../../lib/map/view/commands";
 	import {
 		creatureOutfit,
@@ -35,14 +36,17 @@
 		{ id: "items", label: "Items", title: "Every item of the client, placed as is" },
 		{ id: "creatures", label: "Creatures", title: "Monsters and NPCs" },
 	];
-	type ItemKind = "all" | "ground" | "edge" | "container" | "pickup" | "other";
+	type ItemKind = "all" | "ground" | "wall" | "door" | "stair" | "border" | "container" | "pickup" | "other";
 	const ITEM_KINDS: { id: ItemKind; label: string; title: string }[] = [
 		{ id: "all", label: "All", title: "All items" },
 		{ id: "ground", label: "Ground", title: "Ground tiles" },
-		{ id: "edge", label: "On top", title: "Walls, borders and other items that stay on top" },
-		{ id: "container", label: "Boxes", title: "Containers" },
+		{ id: "wall", label: "Walls", title: "Walls and bottom architectural items" },
+		{ id: "door", label: "Doors", title: "Doors" },
+		{ id: "stair", label: "Stairs", title: "Stairs, ramps, holes and teleports" },
+		{ id: "border", label: "Borders", title: "Borders and ground edges" },
+		{ id: "container", label: "Boxes", title: "Containers and depots" },
 		{ id: "pickup", label: "Loot", title: "Items players can pick up" },
-		{ id: "other", label: "Other", title: "Everything else: decoration, furniture" },
+		{ id: "other", label: "Other", title: "Everything else: decoration, furniture, top items" },
 	];
 	const TERRAIN_GROUPS: { kinds: string[]; label: string }[] = [
 		{ kinds: ["ground"], label: "Grounds" },
@@ -62,7 +66,7 @@
 	const PREFS_KEY = "map:library";
 	const prefs = loadPrefs();
 	let view = $state<View>(prefs.view);
-	let collection = $state<string>(prefs.collection);
+	let collectionsByView = $state<Record<View, string>>(prefs.collectionsByView);
 	let layouts = $state<Record<View, Layout>>(prefs.layouts);
 	const layout = $derived(layouts[view]);
 	let zoom = $state(prefs.zoom);
@@ -75,10 +79,16 @@
 	let who = $state<"all" | "monster" | "npc">("all");
 	let query = $state("");
 
-	function loadPrefs(): { view: View; collection: string; layouts: Record<View, Layout>; zoom: number } {
+	function loadPrefs(): {
+		view: View;
+		collectionsByView: Record<View, string>;
+		layouts: Record<View, Layout>;
+		zoom: number;
+	} {
 		const stored = (readJson(PREFS_KEY) ?? {}) as {
 			view?: View;
 			collection?: unknown;
+			collectionsByView?: unknown;
 			layouts?: unknown;
 			zoom?: unknown;
 		};
@@ -88,9 +98,19 @@
 				if (tab in layouts && (value === "list" || value === "grid")) layouts[tab as View] = value;
 			}
 		}
+		const view: View = VIEWS.some((tab) => tab.id === stored.view) ? stored.view! : "terrain";
+		const collectionsByView: Record<View, string> = { terrain: "", decor: "", items: "", creatures: "" };
+		if (stored.collectionsByView && typeof stored.collectionsByView === "object") {
+			for (const [tab, value] of Object.entries(stored.collectionsByView)) {
+				if (tab in collectionsByView && typeof value === "string") collectionsByView[tab as View] = value;
+			}
+		} else if (typeof stored.collection === "string" && stored.collection) {
+			collectionsByView[view] = stored.collection;
+			collectionsByView.items = stored.collection;
+		}
 		return {
-			view: VIEWS.some((view) => view.id === stored.view) ? stored.view! : "terrain",
-			collection: typeof stored.collection === "string" ? stored.collection : "",
+			view,
+			collectionsByView,
 			layouts,
 			zoom:
 				typeof stored.zoom === "number" && Number.isInteger(stored.zoom)
@@ -98,7 +118,14 @@
 					: 1,
 		};
 	}
-	$effect(() => saveJson(PREFS_KEY, { view, collection, layouts: $state.snapshot(layouts), zoom }));
+	$effect(() =>
+		saveJson(PREFS_KEY, {
+			view,
+			collectionsByView: $state.snapshot(collectionsByView),
+			layouts: $state.snapshot(layouts),
+			zoom,
+		}),
+	);
 
 	// Ctrl+wheel over a grid enlarges its icons.
 	function onwheel(event: WheelEvent) {
@@ -114,10 +141,22 @@
 	const palette = $derived(map.palette);
 	const loadingData = $derived(app.open && (!map.items || !map.palette));
 	const sets = $derived(palette?.tilesets?.filter((tileset) => !!tileset) ?? []);
-	const set = $derived(sets.find((tileset) => tileset.name === collection) ?? null);
+	const tabSets = $derived.by(() => {
+		if (view === "terrain") return sets.filter((tileset) => (tileset.terrain?.length ?? 0) > 0);
+		if (view === "decor") return sets.filter((tileset) => (tileset.doodads?.length ?? 0) > 0);
+		if (view === "items")
+			return sets.filter((tileset) => (tileset.items?.length ?? 0) + (tileset.raw?.length ?? 0) > 0);
+		return [];
+	});
+	const activeCollection = $derived.by(() => {
+		const chosen = collectionsByView[view] ?? "";
+		if (!chosen) return "";
+		return tabSets.some((tileset) => tileset.name === chosen) ? chosen : "";
+	});
+	const set = $derived(tabSets.find((tileset) => tileset.name === activeCollection) ?? null);
 	const collections = $derived([
 		{ value: "", label: "All collections" },
-		...sets.map((tileset) => ({ value: tileset.name, label: tileset.name })),
+		...tabSets.map((tileset) => ({ value: tileset.name, label: tileset.name })),
 	]);
 	const allBrushes = $derived((palette?.brushes ?? []).filter((brush): brush is PaletteBrush => !!brush));
 	const creatures = $derived((palette?.creatures ?? []).filter((creature): creature is CreatureType => !!creature));
@@ -127,23 +166,27 @@
 		search ? list.filter((entry) => entry.name.toLowerCase().includes(search)) : list;
 
 	const terrainAll = $derived(
-		set ? ((set.terrain ?? []) as PaletteBrush[]) : allBrushes.filter((brush) => brush.kind !== "doodad"),
+		set && view === "terrain"
+			? ((set.terrain ?? []) as PaletteBrush[])
+			: allBrushes.filter((brush) => brush.kind !== "doodad"),
 	);
 	const decorAll = $derived(
-		set ? ((set.doodads ?? []) as PaletteBrush[]) : allBrushes.filter((brush) => brush.kind === "doodad"),
+		set && view === "decor"
+			? ((set.doodads ?? []) as PaletteBrush[])
+			: allBrushes.filter((brush) => brush.kind === "doodad"),
 	);
 	const terrain = $derived(named(terrainAll));
 	const decor = $derived(named(decorAll));
 
 	const collectionItems = $derived.by<number[]>(() => {
-		if (set) return [...new Set([...(set.items ?? []), ...(set.raw ?? [])])];
+		if (set && view === "items") return [...new Set([...(set.items ?? []), ...(set.raw ?? [])])];
 		return map.items?.ids ?? [];
 	});
 	// Names, ids and id ranges ("100-200") match, as in the item search.
 	const baseItems = $derived.by<number[]>(() => {
 		if (!search || !map.items) return collectionItems;
 		const hits = map.items.search(search, Infinity);
-		if (!set) return hits;
+		if (!set || view !== "items") return hits;
 		const hit = new Set(hits);
 		return collectionItems.filter((id) => hit.has(id));
 	});
@@ -152,18 +195,31 @@
 		if (!itemIndex || itemKind === "all") return baseItems;
 		return baseItems.filter((id) => {
 			const ground = itemIndex.is(id, "ground");
-			const edge = !ground && itemIndex.topOf(id) > 0;
+			const top = itemIndex.topOf(id);
+			const kind = itemIndex.kindOf(id);
+			const door = kind === ITEM_KIND.door;
+			const stair = itemIndex.is(id, "floorChange") || kind === ITEM_KIND.teleport;
+			const border = !ground && top === TOP_ORDER.border;
+			const wall = !ground && !door && top === TOP_ORDER.bottom;
+			const container = itemIndex.is(id, "container") || kind === ITEM_KIND.container || kind === ITEM_KIND.depot;
+			const pickup = itemIndex.is(id, "pickupable") && !container;
 			switch (itemKind) {
 				case "ground":
 					return ground;
-				case "edge":
-					return edge;
+				case "wall":
+					return wall;
+				case "door":
+					return door;
+				case "stair":
+					return stair;
+				case "border":
+					return border;
 				case "container":
-					return itemIndex.is(id, "container");
+					return container;
 				case "pickup":
-					return itemIndex.is(id, "pickupable") && !itemIndex.is(id, "container");
+					return pickup;
 				default:
-					return !ground && !edge && !itemIndex.is(id, "pickupable") && !itemIndex.is(id, "container");
+					return !ground && !wall && !door && !stair && !border && !container && !pickup;
 			}
 		});
 	});
@@ -172,8 +228,14 @@
 		const itemIndex = map.items;
 		if (!itemIndex) return "other";
 		if (itemIndex.is(id, "ground")) return "ground";
-		if (itemIndex.topOf(id) > 0) return "edge";
-		if (itemIndex.is(id, "container")) return "container";
+		const kind = itemIndex.kindOf(id);
+		if (kind === ITEM_KIND.door) return "door";
+		if (itemIndex.is(id, "floorChange") || kind === ITEM_KIND.teleport) return "stair";
+		const top = itemIndex.topOf(id);
+		if (top === TOP_ORDER.bottom) return "wall";
+		if (top === TOP_ORDER.border) return "border";
+		if (itemIndex.is(id, "container") || kind === ITEM_KIND.container || kind === ITEM_KIND.depot)
+			return "container";
 		if (itemIndex.is(id, "pickupable")) return "pickup";
 		return "other";
 	}
@@ -189,7 +251,7 @@
 			view = "items";
 			itemKind = kindOf(request.id);
 			if (!items.includes(request.id)) query = "";
-			if (!items.includes(request.id)) collection = "";
+			if (!items.includes(request.id)) collectionsByView.items = "";
 			revealed = request.id;
 		});
 	});
@@ -204,7 +266,8 @@
 			const decorBrush = request.kind === "doodad";
 			view = decorBrush ? "decor" : "terrain";
 			if (!(decorBrush ? decor : terrain).some((brush) => brush.name === request.name)) query = "";
-			if (!(decorBrush ? decorAll : terrainAll).some((brush) => brush.name === request.name)) collection = "";
+			if (!(decorBrush ? decorAll : terrainAll).some((brush) => brush.name === request.name))
+				collectionsByView[view] = "";
 			void tick().then(() => libraryRoot?.querySelector(".m-body .on")?.scrollIntoView({ block: "nearest" }));
 		});
 	});
@@ -266,6 +329,10 @@
 	}
 
 	function brushMenu(event: MouseEvent, brush: PaletteBrush) {
+		if (brush.builtin) {
+			openContextMenu(event, [{ label: "Customize brush…", action: () => editBrush(brush) }]);
+			return;
+		}
 		openContextMenu(event, [
 			{ label: "Edit brush…", action: () => editBrush(brush) },
 			{ label: "Remove brush", action: () => removeBrush(brush) },
@@ -435,7 +502,8 @@
 {#snippet noMatch()}
 	<div class="m-empty">
 		<span>Nothing here matches “{query}”.</span>
-		{#if set}<button class="t-btn" onclick={() => (collection = "")}>Search all collections</button>{/if}
+		{#if set}<button class="t-btn" onclick={() => (collectionsByView[view] = "")}>Search all collections</button
+			>{/if}
 	</div>
 {/snippet}
 
@@ -477,15 +545,15 @@
 		{/each}
 	</div>
 
-	{#if view !== "creatures" && sets.length}
+	{#if view !== "creatures" && tabSets.length}
 		<div class="bar" title="Collections are the tilesets of your brush data; the tabs below filter items by kind">
 			<span class="t-label dim">Collection</span>
 			<Select
 				grow
-				value={collection}
+				value={activeCollection}
 				options={collections}
 				maxItems={16}
-				onchange={(value) => (collection = value)}
+				onchange={(value) => (collectionsByView[view] = value)}
 			/>
 			{#if view !== "items"}<button class="t-icon-btn" title="New brush" onclick={newBrush}
 					><Icon name="plus" /></button
@@ -760,7 +828,16 @@
 		gap: 4px;
 		align-items: center;
 	}
-	.kinds > button,
+	.kinds {
+		flex-wrap: wrap;
+		gap: 2px;
+	}
+	.kinds > button {
+		flex: 1 0 auto;
+		min-width: 44px;
+		font-size: 11px;
+		padding: 0 4px;
+	}
 	.views > button {
 		font-size: 12px;
 		padding: 0 2px;

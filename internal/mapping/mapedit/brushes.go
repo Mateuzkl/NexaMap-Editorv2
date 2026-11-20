@@ -678,6 +678,11 @@ func (b *Brushes) isBorder(id uint16) bool {
 	return itemType != nil && itemType.TopOrder == borderTopOrder
 }
 
+func (b *Brushes) IsDoor(id uint16) bool {
+	info := b.info[id]
+	return info != nil && info.door
+}
+
 func (b *Brushes) wallOf(id uint16) (*WallBrush, *itemInfo) {
 	info := b.info[id]
 	if info == nil || info.wall == nil {

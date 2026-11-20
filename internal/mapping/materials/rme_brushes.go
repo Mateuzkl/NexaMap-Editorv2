@@ -225,6 +225,9 @@ func (im *importer) wall(brush *Brush, node *xmltree.Node) {
 					part.Items = append(part.Items, Chance{ID: itemNode.U16("id"), Chance: itemNode.Int("chance")})
 				case "door":
 					doorType := strings.ReplaceAll(strings.ToLower(itemNode.Str("type")), "_", " ")
+					if doorType == "normal alt" {
+						doorType = "normal"
+					}
 					open := true
 					if itemNode.Has("open") {
 						open = itemNode.Bool("open")

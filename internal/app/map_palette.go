@@ -1,8 +1,9 @@
 package app
 
 import (
+	"fmt"
 	"math"
-	"slices"
+	"strings"
 
 	"github.com/nekiro/ots-creator/internal/mapping/materials"
 )
@@ -12,6 +13,8 @@ type PaletteBrush struct {
 	Kind string `json:"kind"`
 	// Look is the server id of the item shown.
 	Look uint16 `json:"look"`
+	// Builtin is true for bundled NexaMap brushes that have not been customized by the user.
+	Builtin bool `json:"builtin,omitempty"`
 	// Preview shows a brush that places a group of tiles (a stamp made from
 	// a selection) as the whole group; nil for one-tile brushes.
 	Preview *BrushPreview `json:"preview,omitempty"`
@@ -87,34 +90,109 @@ func (ms *MapService) Palette() (palette Palette, err error) {
 }
 
 func (data *mapData) palette() Palette {
+	eff := data.effective
+	if eff == nil {
+		eff = data.materials
+	}
+	userBrushes := make(map[string]bool, len(data.materials.Brushes))
+	for _, b := range data.materials.Brushes {
+		userBrushes[strings.ToLower(b.Name)] = true
+	}
+
 	palette := Palette{DoorTypes: materials.DoorTypes, Creatures: data.allCreatures()}
-	for _, brush := range data.materials.Brushes {
-		if paletteBrush, ok := data.paletteBrush(brush.Name); ok {
+	brushByName := make(map[string]PaletteBrush, len(eff.Brushes))
+	for _, brush := range eff.Brushes {
+		isBuiltin := !userBrushes[strings.ToLower(brush.Name)]
+		if paletteBrush, ok := data.paletteBrush(brush, isBuiltin); ok {
 			palette.Brushes = append(palette.Brushes, paletteBrush)
+			brushByName[strings.ToLower(brush.Name)] = paletteBrush
 		}
 	}
-	tilesets := slices.Concat(data.materials.Tilesets, materials.AutoTilesets(data.items))
-	for _, tileset := range tilesets {
-		paletteTileset := PaletteTileset{Name: tileset.Name, Auto: tileset.Auto, Items: tileset.Items, Raw: tileset.Raw}
-		paletteTileset.Terrain = data.paletteBrushes(tileset.Terrain)
-		paletteTileset.Doodads = data.paletteBrushes(tileset.Doodads)
+
+	userTilesets := make(map[string]bool, len(data.materials.Tilesets))
+	for _, ts := range data.materials.Tilesets {
+		userTilesets[strings.ToLower(ts.Name)] = true
+	}
+
+	usedNames := map[string]bool{}
+	for _, tileset := range eff.Tilesets {
+		isUser := userTilesets[strings.ToLower(tileset.Name)]
+		paletteTileset := PaletteTileset{
+			Name:    tileset.Name,
+			Auto:    tileset.Auto,
+			Terrain: lookupPaletteBrushes(brushByName, tileset.Terrain),
+			Doodads: lookupPaletteBrushes(brushByName, tileset.Doodads),
+		}
+		if isUser {
+			paletteTileset.Items = tileset.Items
+			paletteTileset.Raw = tileset.Raw
+		} else {
+			paletteTileset.Items = data.filterItems(tileset.Items)
+			paletteTileset.Raw = data.filterItems(tileset.Raw)
+			if len(paletteTileset.Terrain) == 0 && len(paletteTileset.Doodads) == 0 && len(paletteTileset.Items) == 0 && len(paletteTileset.Raw) == 0 {
+				continue
+			}
+		}
 		palette.Tilesets = append(palette.Tilesets, paletteTileset)
+		usedNames[strings.ToLower(paletteTileset.Name)] = true
+	}
+
+	for _, tileset := range materials.AutoTilesets(data.items) {
+		name := uniqueTilesetName(tileset.Name, usedNames)
+		usedNames[strings.ToLower(name)] = true
+		palette.Tilesets = append(palette.Tilesets, PaletteTileset{
+			Name:  name,
+			Auto:  true,
+			Items: tileset.Items,
+			Raw:   tileset.Raw,
+		})
 	}
 	return palette
 }
 
-func (data *mapData) paletteBrushes(names []string) []PaletteBrush {
-	var out []PaletteBrush
-	for _, name := range names {
-		if paletteBrush, ok := data.paletteBrush(name); ok {
-			out = append(out, paletteBrush)
+func uniqueTilesetName(base string, used map[string]bool) string {
+	if !used[strings.ToLower(base)] {
+		return base
+	}
+	candidate := base + " (Flags)"
+	if !used[strings.ToLower(candidate)] {
+		return candidate
+	}
+	for n := 2; ; n++ {
+		candidate = fmt.Sprintf("%s (Flags %d)", base, n)
+		if !used[strings.ToLower(candidate)] {
+			return candidate
+		}
+	}
+}
+
+func (data *mapData) filterItems(ids []uint16) []uint16 {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([]uint16, 0, len(ids))
+	for _, id := range ids {
+		if data.hasItem(id) {
+			out = append(out, id)
 		}
 	}
 	return out
 }
 
-func (data *mapData) paletteBrush(name string) (PaletteBrush, bool) {
-	brush := data.materials.Brush(name)
+func lookupPaletteBrushes(byName map[string]PaletteBrush, names []string) []PaletteBrush {
+	if len(names) == 0 {
+		return nil
+	}
+	out := make([]PaletteBrush, 0, len(names))
+	for _, name := range names {
+		if pb, ok := byName[strings.ToLower(name)]; ok {
+			out = append(out, pb)
+		}
+	}
+	return out
+}
+
+func (data *mapData) paletteBrush(brush *materials.Brush, builtin bool) (PaletteBrush, bool) {
 	if brush == nil {
 		return PaletteBrush{}, false
 	}
@@ -127,5 +205,8 @@ func (data *mapData) paletteBrush(name string) (PaletteBrush, bool) {
 	if look == 0 {
 		look = brush.Look
 	}
-	return PaletteBrush{Name: brush.Name, Kind: kind, Look: look, Preview: brushPreview(brush)}, true
+	if resolved := data.resolveBrushLook(brush, look); resolved != 0 {
+		look = resolved
+	}
+	return PaletteBrush{Name: brush.Name, Kind: kind, Look: look, Builtin: builtin, Preview: brushPreview(brush)}, true
 }

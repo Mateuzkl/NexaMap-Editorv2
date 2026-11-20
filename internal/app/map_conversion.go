@@ -48,5 +48,5 @@ func (ms *MapService) ViewData(id int, activate bool) (view MapViewData, err err
 	if activate {
 		ms.activeID = id
 	}
-	return MapViewData{Data: data.info(), Items: itemTable(data.items), Palette: data.palette()}, nil
+	return MapViewData{Data: data.info(), Items: itemTable(data.items, data.brushes), Palette: data.palette()}, nil
 }

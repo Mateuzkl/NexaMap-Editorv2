@@ -283,13 +283,15 @@ func AutoTilesets(db *otitems.DB) []*Tileset {
 		{"Borders", func(itemType *otitems.Type) bool { return itemType.TopOrder == 1 }},
 		{"Walls", func(itemType *otitems.Type) bool { return itemType.TopOrder == 2 && !itemType.IsDoor() }},
 		{"Doors", func(itemType *otitems.Type) bool { return itemType.IsDoor() }},
+		{"Teleports", func(itemType *otitems.Type) bool { return itemType.IsTeleport() }},
 		{"Stairs & holes", func(itemType *otitems.Type) bool {
-			return itemType.Flags.Has(otitems.FlagFloorChange) || itemType.IsTeleport()
+			return itemType.Flags.Has(otitems.FlagFloorChange)
 		}},
 		{"Containers", func(itemType *otitems.Type) bool { return itemType.IsContainer() }},
 		{"Fluids & splashes", func(itemType *otitems.Type) bool {
 			return itemType.Flags&(otitems.FlagSplash|otitems.FlagFluidContainer) != 0
 		}},
+		{"Hangables", func(itemType *otitems.Type) bool { return itemType.Flags.Has(otitems.FlagHangable) }},
 		{"Top items", func(itemType *otitems.Type) bool { return itemType.TopOrder == 3 }},
 		{"Light sources", func(itemType *otitems.Type) bool {
 			return itemType.Flags.Has(otitems.FlagLight) && !itemType.Flags.Has(otitems.FlagPickupable)

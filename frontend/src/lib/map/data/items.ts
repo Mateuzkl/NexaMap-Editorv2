@@ -1,6 +1,20 @@
 import type { ItemTable } from "./api";
 
 export const TOP_ORDER = { common: 0, border: 1, bottom: 2, top: 3 } as const;
+export const ITEM_KIND = {
+	none: 0,
+	depot: 1,
+	mailbox: 2,
+	trashHolder: 3,
+	container: 4,
+	door: 5,
+	magicField: 6,
+	teleport: 7,
+	bed: 8,
+	key: 9,
+	podium: 10,
+	rune: 11,
+} as const;
 
 export const MAX_UINT32_ITEM_ID = 4294967295;
 const DENSE_ITEM_LIMIT = 262144;
@@ -146,6 +160,11 @@ export class ItemIndex {
 	topOf(id: number): number {
 		if (id < this.denseCount) return this.top[id] ?? 0;
 		return this.sparse.get(id)?.top ?? 0;
+	}
+
+	kindOf(id: number): number {
+		if (id < this.denseCount) return this.kind[id] ?? 0;
+		return this.sparse.get(id)?.kind ?? 0;
 	}
 
 	is(id: number, flag: string): boolean {
