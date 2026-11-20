@@ -45,6 +45,8 @@ export type MapDialog =
 	| "text"
 	| "collab"
 	| "huntforge"
+	| "learnBorder"
+	| "quickReplace"
 	| null;
 
 export type Focus =
@@ -74,6 +76,7 @@ const DEFAULT_CAMERA: Readonly<Camera> = { x: 0, y: 0, zoom: 1, floor: GROUND_FL
 
 const VIEW_KEY = "map:view";
 const BRUSH_KEY = "map:brush";
+const FAVORITES_KEY = "map:favorites";
 
 const DEFAULT_VIEW: ViewOptions = {
 	grid: false,
@@ -100,6 +103,17 @@ const DEFAULT_VIEW: ViewOptions = {
 	lights: false,
 	ambientLight: 15,
 };
+
+function loadFavorites(): BrushSel[] {
+	const raw = loadJson<unknown[]>(FAVORITES_KEY, []);
+	return raw.filter(
+		(entry): entry is BrushSel =>
+			!!entry &&
+			typeof entry === "object" &&
+			typeof (entry as BrushSel).kind === "string" &&
+			typeof (entry as BrushSel).label === "string",
+	);
+}
 
 class MapState {
 	/** Not remembered: each start shows the start screen, which picks the editor. */
@@ -129,6 +143,7 @@ class MapState {
 	fill = $state(false);
 	reroll = $state(0);
 	recentBrushes = $state<BrushSel[]>([]);
+	favorites = $state<BrushSel[]>(loadFavorites());
 	/** Item the library should show and scroll to (set by picking a brush from the map). */
 	revealItem = $state<{ id: number } | null>(null);
 	/** A brush picked from the map: the library shows its tab. */
@@ -145,13 +160,17 @@ class MapState {
 	focus = $state<Focus | null>(null);
 	side = $state<SidePanel>("library");
 	findOpen = $state(false);
-	findPreset = $state<{ ids?: number[]; inSelection?: boolean; replace?: boolean } | null>(null);
+	findPreset = $state<{ ids?: number[]; kind?: string; inSelection?: boolean; replace?: boolean } | null>(null);
 	results = $state.raw<{ title: string; items: FindResultRow[]; more: boolean } | null>(null);
 	/** Command palette: null closed, otherwise the text it opens with. */
 	command = $state<string | null>(null);
 	dialog = $state<MapDialog>(null);
 	/** Tile right-clicked when opening Hunt Forge from the map context menu. */
 	huntForgeAnchor = $state.raw<Position | null>(null);
+	/** Item ID to pre-select when opening Quick Replace Items from a tile right-click. */
+	quickReplaceAnchorItem = $state<number>(0);
+	/** Initial tab mode when opening Learn Border dialog ("selection" or "map"). */
+	learnBorderMode = $state<"selection" | "map">("selection");
 	/** Item shown in the text dialog (index among the tile items, ground excluded). */
 	textItem = $state<{ pos: Position; index: number } | null>(null);
 	editBrush = $state<{ name: string; type: string } | null>(null);
@@ -182,6 +201,7 @@ export const map = new MapState();
 $effect.root(() => {
 	$effect(() => saveJson(VIEW_KEY, map.view));
 	$effect(() => saveJson(BRUSH_KEY, { size: map.size, shape: map.shape }));
+	$effect(() => saveJson(FAVORITES_KEY, $state.snapshot(map.favorites)));
 });
 
 {
@@ -386,6 +406,24 @@ function brushKey(brush: BrushSel): string {
 
 export function isBrushActive(brush: BrushSel): boolean {
 	return !!map.brush && map.tool === "brush" && brushKey(map.brush) === brushKey(brush);
+}
+
+export function isFavoriteBrush(brush: BrushSel): boolean {
+	const list = Array.isArray(map.favorites) ? map.favorites : [];
+	const key = brushKey(brush);
+	return list.some((fav) => brushKey(fav) === key);
+}
+
+export function toggleFavoriteBrush(brush: BrushSel): boolean {
+	const list = Array.isArray(map.favorites) ? map.favorites : [];
+	const key = brushKey(brush);
+	const exists = list.some((fav) => brushKey(fav) === key);
+	if (exists) {
+		map.favorites = list.filter((fav) => brushKey(fav) !== key);
+		return false;
+	}
+	map.favorites = [brush, ...list].slice(0, 64);
+	return true;
 }
 
 export function creatureOutfit(name: string | undefined): number {

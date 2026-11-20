@@ -413,6 +413,39 @@ func lookDistance(left, right spriteLook) float64 {
 		100*math.Abs(left.cover-right.cover)
 }
 
+// visualScores returns a 0..1 visual similarity score against baseID for each
+// candidate item ID using cached sprite average color, opacity coverage, and
+// dimensions.
+func (cache *lookCache) visualScores(data *mapData, items *otitems.DB, baseID uint16, candidates []uint16) map[uint16]float64 {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	if cache.project != data.project || cache.looks == nil {
+		cache.project, cache.looks = data.project, map[uint16]spriteLook{}
+	}
+	base := cache.look(data, items, baseID)
+	if !base.ok {
+		return nil
+	}
+	out := make(map[uint16]float64, len(candidates))
+	for _, cid := range candidates {
+		look := cache.look(data, items, cid)
+		if !look.ok {
+			continue
+		}
+		dist := lookDistance(base, look)
+		if look.width != base.width || look.height != base.height {
+			dist += 120
+		}
+		// Normalize distance (0..450) into 0..1 similarity.
+		sim := 1.0 - dist/450.0
+		if sim < 0 {
+			sim = 0
+		}
+		out[cid] = sim
+	}
+	return out
+}
+
 // alike returns the items near an item's id of its class and size that
 // look most like it, closest first.
 func (cache *lookCache) alike(data *mapData, items *otitems.DB, id uint16) []uint16 {

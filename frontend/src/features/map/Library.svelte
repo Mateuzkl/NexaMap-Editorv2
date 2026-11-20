@@ -11,11 +11,13 @@
 	import {
 		creatureOutfit,
 		isBrushActive,
+		isFavoriteBrush,
 		loadMapData,
 		map,
 		namedBrush,
 		reloadPalette,
 		selectBrush,
+		toggleFavoriteBrush,
 		type BrushSel,
 	} from "../../lib/map/state.svelte";
 	import Icon from "../../lib/ui/Icon.svelte";
@@ -328,24 +330,52 @@
 		}
 	}
 
+	function toggleFav(choice: BrushSel) {
+		const added = toggleFavoriteBrush(choice);
+		toast(added ? `Added "${choice.label}" to Favorites.` : `Removed "${choice.label}" from Favorites.`);
+	}
+
 	function brushMenu(event: MouseEvent, brush: PaletteBrush) {
+		const choice = brushSel(brush);
+		const favEntry = {
+			label: isFavoriteBrush(choice) ? "★ Remove from favorites" : "★ Add to favorites",
+			action: () => toggleFav(choice),
+		};
 		if (brush.builtin) {
-			openContextMenu(event, [{ label: "Customize brush…", action: () => editBrush(brush) }]);
+			openContextMenu(event, [favEntry, "-", { label: "Customize brush…", action: () => editBrush(brush) }]);
 			return;
 		}
 		openContextMenu(event, [
+			favEntry,
+			"-",
 			{ label: "Edit brush…", action: () => editBrush(brush) },
 			{ label: "Remove brush", action: () => removeBrush(brush) },
 		]);
 	}
 
 	function itemMenu(event: MouseEvent, id: number) {
+		const choice = itemSel(id);
 		openContextMenu(event, [
+			{
+				label: isFavoriteBrush(choice) ? "★ Remove from favorites" : "★ Add to favorites",
+				action: () => toggleFav(choice),
+			},
+			"-",
 			{ label: "Find on the map", action: () => mapCommands.find({ ids: [id] }) },
 			{ label: "Replace on the map…", action: () => mapCommands.find({ ids: [id], replace: true }) },
 			"-",
 			{ label: "Add to a collection…", action: () => addToCollection(id) },
 			{ label: "Copy id", action: () => navigator.clipboard.writeText(String(id)) },
+		]);
+	}
+
+	function creatureMenu(event: MouseEvent, creature: CreatureType) {
+		const choice = creatureSel(creature);
+		openContextMenu(event, [
+			{
+				label: isFavoriteBrush(choice) ? "★ Remove from favorites" : "★ Add to favorites",
+				action: () => toggleFav(choice),
+			},
 		]);
 	}
 
@@ -472,6 +502,7 @@
 		class:on={isBrushActive(choice)}
 		title="{creature.name}{creature.npc ? ' · NPC' : ''}"
 		onclick={() => selectBrush(choice)}
+		oncontextmenu={(event) => creatureMenu(event, creature)}
 	>
 		<span class="t-slot"
 			>{#if creature.outfit.lookType || creature.outfit.lookItem}<ItemIcon
@@ -486,7 +517,12 @@
 
 {#snippet creatureRow(creature: CreatureType)}
 	{@const choice = creatureSel(creature)}
-	<button class="m-row" class:on={isBrushActive(choice)} onclick={() => selectBrush(choice)}>
+	<button
+		class="m-row"
+		class:on={isBrushActive(choice)}
+		onclick={() => selectBrush(choice)}
+		oncontextmenu={(event) => creatureMenu(event, creature)}
+	>
 		<span class="t-slot"
 			><ItemIcon
 				outfit={creature.outfit.lookItem ? 0 : creature.outfit.lookType}
@@ -544,6 +580,31 @@
 			>
 		{/each}
 	</div>
+
+	{#if map.favorites.length}
+		<div class="favs" title="Favorites (right-click any item to remove)">
+			<span class="fav-star" title="Favorites">★</span>
+			{#each map.favorites as fav}
+				<button
+					class="m-cell small"
+					class:on={isBrushActive(fav)}
+					title="★ {fav.label} (right-click to remove)"
+					onclick={() => selectBrush(fav)}
+					oncontextmenu={(event) => {
+						event.preventDefault();
+						toggleFav(fav);
+					}}
+				>
+					<span class="t-slot"
+						><ItemIcon
+							id={fav.look ?? fav.item ?? 0}
+							outfit={fav.kind === "creature" ? creatureOutfit(fav.creature) : 0}
+						/></span
+					>
+				</button>
+			{/each}
+		</div>
+	{/if}
 
 	{#if view !== "creatures" && tabSets.length}
 		<div class="bar" title="Collections are the tilesets of your brush data; the tabs below filter items by kind">
@@ -855,9 +916,28 @@
 		flex: none;
 		overflow: hidden;
 	}
+	.favs {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		flex: none;
+		overflow-x: auto;
+		padding: 2px 3px;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 4px;
+		background: rgba(0, 0, 0, 0.22);
+	}
+	.fav-star {
+		color: var(--gold, #e9b46a);
+		font-size: 12px;
+		padding: 0 2px;
+		flex: none;
+	}
+	.favs .small,
 	.recent .small {
 		width: 30px;
-		height: 34px;
+		height: 30px;
+		flex: none;
 	}
 	.key {
 		position: absolute;

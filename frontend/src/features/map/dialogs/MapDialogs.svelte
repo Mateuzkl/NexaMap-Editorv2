@@ -5,8 +5,10 @@
 	import DataDialog from "./DataDialog.svelte";
 	import HuntForgeDialog from "./HuntForgeDialog.svelte";
 	import ImportMapDialog from "./ImportMapDialog.svelte";
+	import LearnBorderDialog from "./LearnBorderDialog.svelte";
 	import MapToolsDialog from "./MapToolsDialog.svelte";
 	import MinimapExportDialog from "./MinimapExportDialog.svelte";
+	import QuickReplaceDialog from "./QuickReplaceDialog.svelte";
 	import ShortcutsDialog from "./ShortcutsDialog.svelte";
 	import TextDialog from "./TextDialog.svelte";
 	import WarningsDialog from "./WarningsDialog.svelte";
@@ -23,6 +25,8 @@
 	{#if map.dialog === "minimap"}<MinimapExportDialog />{/if}
 	{#if map.dialog === "tools"}<MapToolsDialog />{/if}
 	{#if map.dialog === "huntforge"}<HuntForgeDialog />{/if}
+	{#if map.dialog === "learnBorder"}<LearnBorderDialog />{/if}
+	{#if map.dialog === "quickReplace"}<QuickReplaceDialog />{/if}
 	{#if map.dialog === "warnings"}<WarningsDialog />{/if}
 	{#if map.dialog === "text" && map.textItem}<TextDialog />{/if}
 {/if}

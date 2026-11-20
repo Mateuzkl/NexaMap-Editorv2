@@ -1,9 +1,20 @@
 import { app, openSettings, toast } from "../../state/app.svelte";
+import { ask } from "../../confirm.svelte";
 import type { MenuEntry } from "../../menu.svelte";
 import { MapService, fmtPos, type Position, type TileInfo, type TileItem } from "../data/api";
 import { ItemFlags, TileFlags, type TileData } from "../data/chunks";
 import { goTo, mapCommands, selectionScope } from "./commands";
-import { edit, map, namedBrush, selectBrush, useCreature, warningCount, type BrushSel } from "../state.svelte";
+import {
+	edit,
+	isFavoriteBrush,
+	map,
+	namedBrush,
+	selectBrush,
+	toggleFavoriteBrush,
+	useCreature,
+	warningCount,
+	type BrushSel,
+} from "../state.svelte";
 import { addHouse, addTown, addWaypoint } from "../editor/world";
 import { keyLabel } from "./keys";
 import type { ViewOptions } from "../render/scene";
@@ -95,6 +106,14 @@ export function mapMenus(): { label: string; items: MenuEntry[] }[] {
 					action: () => mapCommands.find({ ...selectionScope(), replace: true }),
 					disabled: noMap,
 				},
+				{
+					label: "Quick Replace Items (Multi-Item)…",
+					action: () => {
+						map.quickReplaceAnchorItem = 0;
+						map.dialog = "quickReplace";
+					},
+					disabled: noMap,
+				},
 				{ label: "Go to anything…", keys: keyLabel("palette"), action: () => mapCommands.commandPalette() },
 				"-",
 				{
@@ -156,7 +175,58 @@ export function mapMenus(): { label: string; items: MenuEntry[] }[] {
 					disabled: () => noMap() || map.active?.itemMode !== "otb" || !!app.busy,
 				},
 				{ label: "Map tools…", action: () => (map.dialog = "tools"), disabled: noMap },
-				{ label: "Hunt Forge (Gerador de Hunts)…", action: () => (map.dialog = "huntforge"), disabled: noMap },
+				{
+					label: "Learn border from selection…",
+					action: () => {
+						map.learnBorderMode = "selection";
+						map.dialog = "learnBorder";
+					},
+					disabled: noSelection,
+				},
+				{
+					label: "Auto-learn all missing borders from map…",
+					action: () => {
+						map.learnBorderMode = "map";
+						map.dialog = "learnBorder";
+					},
+					disabled: noMap,
+				},
+				{
+					label: "Hunt Forge (Generate / Expand Hunt)…",
+					action: () => (map.dialog = "huntforge"),
+					disabled: noMap,
+				},
+				"-",
+				{
+					label: "Find duplicated items",
+					action: () => mapCommands.find({ kind: "duplicate" }),
+					disabled: noMap,
+				},
+				{
+					label: "Find empty spawns",
+					action: () => mapCommands.find({ kind: "emptySpawn" }),
+					disabled: noMap,
+				},
+				{
+					label: "Remove duplicated items…",
+					action: async () => {
+						if (
+							await ask({
+								title: "Remove duplicated items",
+								message: "Remove plain stacked duplicate items across the map? (Ctrl+Z undoes it.)",
+								ok: "Remove",
+							})
+						) {
+							await mapCommands.tool("removeDuplicates", false, "Remove duplicated items");
+						}
+					},
+					disabled: noMap,
+				},
+				{
+					label: "Remove all empty respawns",
+					action: () => mapCommands.tool("removeEmptySpawns", false, "Remove empty spawns"),
+					disabled: noMap,
+				},
 				{
 					label: `Load warnings… (${map.activeId !== null ? warningCount(map.loadWarnings[map.activeId]).toLocaleString() : 0})`,
 					action: () => (map.dialog = "warnings"),
@@ -307,7 +377,44 @@ export function mapContextMenu(position: Position, tileData: TileData | null, pi
 			});
 		}
 	}
+	const favTarget = picks.click ?? picks.raw ?? map.brush;
 	out.push(
+		"-",
+		{
+			label: "Quick Replace Items…",
+			action: () => {
+				map.quickReplaceAnchorItem = top || 0;
+				map.dialog = "quickReplace";
+			},
+		},
+		...(favTarget
+			? [
+					{
+						label: isFavoriteBrush(favTarget)
+							? `★ Remove from Favorites (${favTarget.label})`
+							: `★ Add to Favorites (${favTarget.label})`,
+						action: () => {
+							const added = toggleFavoriteBrush(favTarget);
+							toast(
+								added
+									? `Added "${favTarget.label}" to Favorites.`
+									: `Removed "${favTarget.label}" from Favorites.`,
+							);
+						},
+					} as MenuEntry,
+				]
+			: []),
+		"-",
+		{
+			label: "Learn Border from Selection…",
+			action: () => {
+				map.learnBorderMode = "selection";
+				map.dialog = "learnBorder";
+			},
+			disabled: noSelection,
+		},
+		{ label: "Save Terrain as Brush…", action: mapCommands.saveTerrainAsBrush, disabled: noSelection },
+		{ label: "Save Terrain as .otbm…", action: mapCommands.exportSelectionOTBM, disabled: noSelection },
 		"-",
 		{ label: "Select tile", action: () => edit((id) => MapService.SelectTiles(id, [position], false)) },
 		{ label: "Copy", keys: keyLabel("copy"), action: mapCommands.copy, disabled: noSelection },

@@ -30,6 +30,23 @@ describe("storage", () => {
 		saveJson("prefs", { grid: true });
 		expect(loadJson("prefs", { grid: false, labels: true })).toEqual({ grid: true, labels: true });
 		expect(loadJson("missing", { grid: false })).toEqual({ grid: false });
+		writeStored("arr-as-obj", "[1,2]");
+		expect(loadJson("arr-as-obj", { grid: false })).toEqual({ grid: false });
+	});
+
+	it("preserves arrays and recovers from corrupted non-array values", () => {
+		saveJson("favs", []);
+		expect(loadJson("favs", [])).toEqual([]);
+		expect(Array.isArray(loadJson("favs", []))).toBe(true);
+
+		saveJson("favs", [{ kind: "raw", item: 100, label: "stone" }]);
+		expect(loadJson("favs", [])).toEqual([{ kind: "raw", item: 100, label: "stone" }]);
+
+		// Corrupted object stored under an array key must fall back cleanly to []
+		writeStored("favs", "{}");
+		expect(loadJson("favs", [])).toEqual([]);
+		writeStored("favs", "null");
+		expect(loadJson("favs", [])).toEqual([]);
 	});
 
 	it("falls back on unreadable JSON", () => {

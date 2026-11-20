@@ -42,6 +42,12 @@
 			all: "removeCorpses",
 		},
 		{
+			label: "Remove duplicated items",
+			hint: "Plain stacked items sharing an item id already present on the same tile.",
+			selection: "removeDuplicates",
+			all: "removeDuplicates",
+		},
+		{
 			label: "Remove empty spawns",
 			hint: "Spawn areas with no creature in them.",
 			selection: null,
@@ -77,7 +83,7 @@
 		const name = useSelection ? tool.selection! : tool.all;
 		await mapCommands.tool(
 			name,
-			useSelection && (name === "removeInvalid" || name === "removeCorpses"),
+			useSelection && (name === "removeInvalid" || name === "removeCorpses" || name === "removeDuplicates"),
 			tool.label,
 		);
 	}

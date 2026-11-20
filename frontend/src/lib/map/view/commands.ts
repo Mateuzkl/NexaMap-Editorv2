@@ -1,7 +1,7 @@
 import { Events } from "@wailsio/runtime";
 import { DialogService, WindowService, encodeBytes, errorMessage } from "../../api";
 import { clamp } from "../../util/math";
-import { ask, choose } from "../../confirm.svelte";
+import { ask, askText, choose } from "../../confirm.svelte";
 import { openContextMenu, type MenuEntry } from "../../menu.svelte";
 import { app, run, toast } from "../../state/app.svelte";
 import { ItemIdsMode, MapService, SpawnFormat, type ItemIDsChoice, type Position } from "../data/api";
@@ -23,6 +23,7 @@ import {
 	loadMapData,
 	map,
 	refreshTile,
+	reloadPalette,
 	selectBrush,
 	setCam,
 	warningCount,
@@ -474,10 +475,48 @@ export const mapCommands = {
 		map.focus = focus;
 	},
 
-	find(preset: { ids?: number[]; inSelection?: boolean; replace?: boolean } | null = null) {
+	find(preset: { ids?: number[]; kind?: string; inSelection?: boolean; replace?: boolean } | null = null) {
 		if (map.activeId === null) return;
 		map.findPreset = preset;
 		map.findOpen = true;
+	},
+
+	async saveTerrainAsBrush() {
+		const id = map.activeId;
+		if (id === null || !map.active?.selection) {
+			toast("Select terrain tiles on the map first.", "info");
+			return;
+		}
+		const name = await askText({
+			title: "Save Terrain as Brush",
+			label: "Terrain name (saved to Saved Terrains collection)",
+			value: `terrain_${Math.round(map.cam.x)}_${Math.round(map.cam.y)}`,
+			ok: "Save",
+		});
+		if (!name?.trim()) return;
+		try {
+			await MapService.DoodadFromSelection(id, name.trim(), ["Saved Terrains"]);
+			await reloadPalette();
+			toast(`Saved terrain "${name.trim()}" in Decor › Saved Terrains.`, "success");
+		} catch (err) {
+			toast(errorMessage(err), "error");
+		}
+	},
+
+	async exportSelectionOTBM() {
+		const id = map.activeId;
+		if (id === null || !map.active?.selection) {
+			toast("Select terrain tiles on the map first.", "info");
+			return;
+		}
+		const path = await DialogService.SaveFile("saveTerrainOtbm", "Save Terrain (.otbm)", "terrain.otbm", [OTBM]);
+		if (!path) return;
+		try {
+			const saved = await MapService.ExportSelectionOTBM(id, path);
+			toast(`Saved terrain to ${saved}`, "success");
+		} catch (err) {
+			toast(errorMessage(err), "error");
+		}
 	},
 
 	commandPalette(text = "") {

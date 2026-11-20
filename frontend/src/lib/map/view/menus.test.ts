@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { TileInfo, TileItem } from "../data/api";
-import { tilePicks } from "./menus";
+import { TileFlags, type TileData } from "../data/chunks";
+import { map, toggleFavoriteBrush } from "../state.svelte";
+import { mapContextMenu, tilePicks } from "./menus";
 
 const item = (id: number, name: string, brush = "", brushKind = "", topOrder = 0) =>
 	({ id, name, brush, brushKind, topOrder }) as TileItem;
@@ -44,5 +46,52 @@ describe("tilePicks", () => {
 
 	it("picks nothing on an empty tile", () => {
 		expect(tilePicks(null)).toEqual({ brushes: [], raw: null, click: null });
+	});
+});
+
+describe("mapContextMenu", () => {
+	it("builds right-click menu cleanly, opens Quick Replace dialog, and toggles Favorites", () => {
+		map.favorites = [];
+		map.dialog = null;
+		map.quickReplaceAnchorItem = 0;
+
+		const tileData: TileData = {
+			flags: TileFlags.ground,
+			house: 0,
+			ids: new Uint16Array([103, 4500]),
+			subs: new Uint16Array([0, 0]),
+			itemFlags: new Uint8Array([0, 0]),
+			creatures: null,
+			spawn: null,
+			spawnNpc: null,
+			zones: null,
+			text: null,
+		};
+		const picks = tilePicks(tile(item(103, "earth tile", "earth", "ground"), item(4500, "grass border")));
+		const entries = mapContextMenu({ x: 100, y: 200, z: 7 }, tileData, picks);
+		const labels = entries
+			.filter((entry): entry is Exclude<typeof entry, "-"> => entry !== "-")
+			.map((entry) => entry.label);
+
+		expect(labels).toContain("Quick Replace Items…");
+		expect(labels).toContain("Learn Border from Selection…");
+		expect(labels).toContain("Save Terrain as Brush…");
+		expect(labels).toContain("Save Terrain as .otbm…");
+		expect(labels.some((label) => label.startsWith("★ Add to Favorites"))).toBe(true);
+
+		const qr = entries.find((entry) => entry !== "-" && entry.label === "Quick Replace Items…");
+		expect(qr && qr !== "-").toBe(true);
+		if (qr && qr !== "-") qr.action();
+		expect(map.dialog).toBe("quickReplace");
+		expect(map.quickReplaceAnchorItem).toBe(4500);
+
+		// Simulate corrupted non-array state to ensure Favorites helpers never throw
+		(map as unknown as { favorites: unknown }).favorites = {};
+		expect(() => mapContextMenu({ x: 100, y: 200, z: 7 }, tileData, picks)).not.toThrow();
+		expect(toggleFavoriteBrush(picks.click!)).toBe(true);
+		expect(Array.isArray(map.favorites)).toBe(true);
+		expect(map.favorites).toHaveLength(1);
+		map.favorites = [];
+		map.dialog = null;
 	});
 });

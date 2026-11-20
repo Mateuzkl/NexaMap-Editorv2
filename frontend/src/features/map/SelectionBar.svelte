@@ -46,9 +46,28 @@
 		>
 		<button
 			class="txt"
+			title="Scan and quick-replace multiple items in the selection"
+			onclick={() => {
+				map.quickReplaceAnchorItem = 0;
+				map.dialog = "quickReplace";
+			}}>Quick replace…</button
+		>
+		<button
+			class="txt"
 			title="Save the selection as a decoration brush"
 			onclick={() => ((map.editBrush = { name: "", type: "fromSelection" }), (map.dialog = "brush"))}
 			>Make brush…</button
+		>
+		<button
+			class="txt"
+			title="Learn a 12-edge auto-border from the selected tiles"
+			onclick={() => {
+				map.learnBorderMode = "selection";
+				map.dialog = "learnBorder";
+			}}>Learn border…</button
+		>
+		<button class="txt" title="Save selected terrain as a reusable brush" onclick={mapCommands.saveTerrainAsBrush}
+			>Save terrain…</button
 		>
 		<button
 			class="txt"
