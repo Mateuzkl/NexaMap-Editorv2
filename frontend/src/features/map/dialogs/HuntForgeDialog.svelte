@@ -50,8 +50,8 @@
 	let selectedName = $state("");
 	let x1 = $state(Math.max(0, Math.round(map.cam.x) - 36));
 	let y1 = $state(Math.max(0, Math.round(map.cam.y) - 36));
-	let x2 = $state(Math.min(65535, Math.round(map.cam.x) + 36));
-	let y2 = $state(Math.min(65535, Math.round(map.cam.y) + 36));
+	let x2 = $state(Math.min(65535, Math.round(map.cam.x) + 35));
+	let y2 = $state(Math.min(65535, Math.round(map.cam.y) + 35));
 	let z = $state(map.cam.floor);
 
 	let analysisView = $state<HuntAnalysisView | null>(null);
@@ -78,16 +78,34 @@
 	let srcCanvasEl = $state<HTMLDivElement | null>(null);
 	let resCanvasEl = $state<HTMLDivElement | null>(null);
 	let srcImgEl = $state<HTMLImageElement | null>(null);
+	let resImgEl = $state<HTMLImageElement | null>(null);
 
 	let destX = $state(Math.max(100, Math.round(map.cam.x) + 120));
 	let destY = $state(Math.max(100, Math.round(map.cam.y)));
 	let destZ = $state(map.cam.floor);
 	let replaceTiles = $state(true);
 
-	// Interactive pan & Shift+drag visual crop state
+	// Lifecycle, request ordering, auto-fit, and interactive gesture state
+	let mounted = true;
+	let userInteracted = false;
+	let detectSeq = 0;
+	let analyzeSeq = 0;
+	let generateSeq = 0;
+	let pendingFitSource = false;
+	let pendingFitResult = false;
+
 	let panning = $state(false);
 	let cropBox = $state<{ x: number; y: number; w: number; h: number; tiles: string } | null>(null);
 	let detachDrag: (() => void) | null = null;
+	let wheelAnchor: {
+		el: HTMLDivElement;
+		img: HTMLImageElement;
+		u: number;
+		v: number;
+		ptrX: number;
+		ptrY: number;
+		raf: number;
+	} | null = null;
 
 	const filtered = $derived.by(() => {
 		const q = search.trim().toLowerCase();
@@ -131,22 +149,52 @@
 		zoom = clampZoom(Math.min(2.5, fit));
 	}
 
-	function handleWheel(event: WheelEvent) {
+	function cancelWheelAnchor() {
+		if (wheelAnchor) {
+			cancelAnimationFrame(wheelAnchor.raf);
+			wheelAnchor = null;
+		}
+	}
+
+	function handleWheel(event: WheelEvent, kind: "source" | "result") {
 		event.preventDefault();
 		const el = event.currentTarget as HTMLDivElement;
-		const rect = el.getBoundingClientRect();
-		const mx = event.clientX - rect.left + el.scrollLeft;
-		const my = event.clientY - rect.top + el.scrollTop;
+		const img = kind === "source" ? srcImgEl : resImgEl;
 		const factor = event.deltaY < 0 ? 1.18 : 1 / 1.18;
 		const prev = zoom;
 		const next = clampZoom(prev * factor);
 		if (next === prev) return;
+
+		if (img && (!wheelAnchor || wheelAnchor.el !== el || wheelAnchor.img !== img)) {
+			cancelWheelAnchor();
+			const canvasRect = el.getBoundingClientRect();
+			const imgRect = img.getBoundingClientRect();
+			const u = imgRect.width > 0 ? (event.clientX - imgRect.left) / imgRect.width : 0.5;
+			const v = imgRect.height > 0 ? (event.clientY - imgRect.top) / imgRect.height : 0.5;
+			const ptrX = event.clientX - canvasRect.left;
+			const ptrY = event.clientY - canvasRect.top;
+			const anchor = {
+				el,
+				img,
+				u,
+				v,
+				ptrX,
+				ptrY,
+				raf: 0,
+			};
+			anchor.raf = requestAnimationFrame(() => {
+				if (wheelAnchor === anchor) wheelAnchor = null;
+				if (!mounted) return;
+				const newCanvasRect = anchor.el.getBoundingClientRect();
+				const newImgRect = anchor.img.getBoundingClientRect();
+				const targetX = newImgRect.left + anchor.u * newImgRect.width;
+				const targetY = newImgRect.top + anchor.v * newImgRect.height;
+				anchor.el.scrollLeft += targetX - (newCanvasRect.left + anchor.ptrX);
+				anchor.el.scrollTop += targetY - (newCanvasRect.top + anchor.ptrY);
+			});
+			wheelAnchor = anchor;
+		}
 		zoom = next;
-		const ratio = next / prev;
-		requestAnimationFrame(() => {
-			el.scrollLeft = mx * ratio - (event.clientX - rect.left);
-			el.scrollTop = my * ratio - (event.clientY - rect.top);
-		});
 	}
 
 	function clearDragListeners() {
@@ -168,7 +216,7 @@
 			clearDragListeners();
 			const img = srcImgEl;
 			const imgRect = img.getBoundingClientRect();
-			const canvasRect = el.getBoundingClientRect();
+			if (imgRect.width <= 0 || imgRect.height <= 0) return;
 			const reg = analysisView.region;
 			const cols = Math.max(1, analysisView.summary.width);
 			const rows = Math.max(1, analysisView.summary.height);
@@ -189,8 +237,8 @@
 				const ty1 = Math.max(0, Math.min(rows - 1, Math.floor(((ty - imgRect.top) / imgRect.height) * rows)));
 				const ty2 = Math.max(ty1, Math.min(rows - 1, Math.floor(((by - imgRect.top) / imgRect.height) * rows)));
 				return {
-					x: lx - canvasRect.left + el.scrollLeft,
-					y: ty - canvasRect.top + el.scrollTop,
+					x: lx - imgRect.left,
+					y: ty - imgRect.top,
 					w: Math.max(2, rx - lx),
 					h: Math.max(2, by - ty),
 					tx1,
@@ -210,6 +258,7 @@
 				const box = computeBox(clampPxX(ev.clientX), clampPxY(ev.clientY));
 				clearDragListeners();
 				if (box.tx2 - box.tx1 >= 4 && box.ty2 - box.ty1 >= 4) {
+					userInteracted = true;
 					x1 = reg.x1 + box.tx1;
 					y1 = reg.y1 + box.ty1;
 					x2 = reg.x1 + box.tx2;
@@ -250,22 +299,29 @@
 		};
 	}
 
-	async function detectHunts() {
-		if (map.activeId === null) return;
+	async function detectHunts(targetMapId: number | null = map.activeId): Promise<boolean> {
+		if (targetMapId === null) return false;
+		const seq = ++detectSeq;
 		detecting = true;
 		try {
-			suggestions = (await HuntForgeService.Detect(map.activeId)) ?? [];
+			const list = (await HuntForgeService.Detect(targetMapId)) ?? [];
+			if (!mounted || seq !== detectSeq || map.activeId !== targetMapId) return false;
+			suggestions = list;
+			return true;
 		} catch (err) {
-			toast(errorMessage(err), "error");
+			if (mounted && seq === detectSeq) toast(errorMessage(err), "error");
+			return false;
 		} finally {
-			detecting = false;
+			if (mounted && seq === detectSeq) detecting = false;
 		}
 	}
 
-	async function useMapSelection() {
-		if (map.activeId === null) return;
+	async function useMapSelection(fromUser = true, targetMapId: number | null = map.activeId) {
+		if (targetMapId === null) return;
+		if (fromUser) userInteracted = true;
 		try {
-			const reg = await HuntForgeService.SelectionRegion(map.activeId);
+			const reg = await HuntForgeService.SelectionRegion(targetMapId);
+			if (!mounted || map.activeId !== targetMapId) return;
 			x1 = reg.x1;
 			y1 = reg.y1;
 			x2 = reg.x2;
@@ -275,24 +331,34 @@
 			destX = Math.min(65000, reg.x2 + 24);
 			destY = reg.y1;
 			destZ = reg.z1;
-			await analyzeCurrent();
+			await analyzeCurrent(false, targetMapId);
 		} catch (err) {
-			toast(errorMessage(err), "error");
+			if (mounted) toast(errorMessage(err), "error");
 		}
 	}
 
-	async function useAreaAround(cx: number, cy: number, cz: number, label: string) {
-		const half = 36;
-		x1 = Math.max(0, Math.round(cx) - half);
-		y1 = Math.max(0, Math.round(cy) - half);
-		x2 = Math.min(65535, Math.round(cx) + half);
-		y2 = Math.min(65535, Math.round(cy) + half);
+	async function useAreaAround(
+		cx: number,
+		cy: number,
+		cz: number,
+		label: string,
+		fromUser = true,
+		targetMapId: number | null = map.activeId,
+	) {
+		if (targetMapId === null) return;
+		if (fromUser) userInteracted = true;
+		const startX = Math.max(0, Math.min(65535 - 71, Math.round(cx) - 36));
+		const startY = Math.max(0, Math.min(65535 - 71, Math.round(cy) - 36));
+		x1 = startX;
+		y1 = startY;
+		x2 = startX + 71;
+		y2 = startY + 71;
 		z = cz;
 		selectedName = label;
 		destX = Math.min(65000, x2 + 24);
 		destY = y1;
 		destZ = cz;
-		await analyzeCurrent();
+		await analyzeCurrent(false, targetMapId);
 	}
 
 	function setDestToCamera() {
@@ -301,7 +367,9 @@
 		destZ = map.cam.floor;
 	}
 
-	async function pickSuggestion(s: HuntSuggestion) {
+	async function pickSuggestion(s: HuntSuggestion, fromUser = true, targetMapId: number | null = map.activeId) {
+		if (targetMapId === null) return;
+		if (fromUser) userInteracted = true;
 		selectedName = s.name;
 		x1 = s.region.x1;
 		y1 = s.region.y1;
@@ -311,37 +379,48 @@
 		destX = Math.min(65000, s.region.x2 + 24);
 		destY = s.region.y1;
 		destZ = s.region.z1;
-		await analyzeCurrent();
+		await analyzeCurrent(false, targetMapId);
 	}
 
-	async function analyzeCurrent() {
-		if (map.activeId === null) return;
+	async function analyzeCurrent(fromUser = true, targetMapId: number | null = map.activeId) {
+		if (targetMapId === null) return;
+		if (fromUser) userInteracted = true;
+		const seq = ++analyzeSeq;
+		generateSeq++;
 		analyzing = true;
+		analysisView = null;
+		generateView = null;
+		srcNatW = 0;
+		srcNatH = 0;
+		resNatW = 0;
+		resNatH = 0;
 		try {
 			const view = await HuntForgeService.Analyze(
-				map.activeId,
+				targetMapId,
 				currentRegion(),
 				selectedName || `hunt_${x1}_${y1}_z${z}`,
 				showMonsters,
 			);
+			if (!mounted || seq !== analyzeSeq || map.activeId !== targetMapId) return;
+			pendingFitSource = true;
 			analysisView = view;
-			generateView = null;
-			resNatW = 0;
-			resNatH = 0;
 		} catch (err) {
-			toast(errorMessage(err), "error");
+			if (mounted && seq === analyzeSeq) toast(errorMessage(err), "error");
 		} finally {
-			analyzing = false;
+			if (mounted && seq === analyzeSeq) analyzing = false;
 		}
 	}
 
 	async function generateHunt() {
-		if (map.activeId === null) return;
+		const targetMapId = map.activeId;
+		if (targetMapId === null || analyzing || !analysisView) return;
 		if (newSeedEachRun) seed = Math.floor(Math.random() * 999999) + 1;
+		const seq = ++generateSeq;
+		const activeAnalysisSeq = analyzeSeq;
 		generating = true;
 		try {
 			const view = await HuntForgeService.Generate(
-				map.activeId,
+				targetMapId,
 				currentRegion(),
 				selectedName || `hunt_${x1}_${y1}_z${z}`,
 				{
@@ -356,25 +435,35 @@
 				},
 				showMonsters,
 			);
+			if (!mounted || seq !== generateSeq || activeAnalysisSeq !== analyzeSeq || map.activeId !== targetMapId)
+				return;
+			pendingFitResult = true;
 			generateView = view;
 		} catch (err) {
-			toast(errorMessage(err), "error");
+			if (mounted && seq === generateSeq) toast(errorMessage(err), "error");
 		} finally {
-			generating = false;
+			if (mounted && seq === generateSeq) generating = false;
 		}
 	}
 
 	async function toggleMonsters() {
 		showMonsters = !showMonsters;
-		if (map.activeId === null) return;
+		const targetMapId = map.activeId;
+		if (targetMapId === null) return;
+		const activeAnalysisSeq = analyzeSeq;
+		const activeGenerateSeq = generateSeq;
 		try {
 			if (analysisView) {
-				const src = await HuntForgeService.RenderPreview(map.activeId, "source", showMonsters);
-				if (src) analysisView = { ...analysisView, preview: src };
+				const src = await HuntForgeService.RenderPreview(targetMapId, "source", showMonsters);
+				if (mounted && activeAnalysisSeq === analyzeSeq && analysisView && src) {
+					analysisView = { ...analysisView, preview: src };
+				}
 			}
 			if (generateView) {
-				const res = await HuntForgeService.RenderPreview(map.activeId, "result", showMonsters);
-				if (res) generateView = { ...generateView, preview: res };
+				const res = await HuntForgeService.RenderPreview(targetMapId, "result", showMonsters);
+				if (mounted && activeGenerateSeq === generateSeq && generateView && res) {
+					generateView = { ...generateView, preview: res };
+				}
 			}
 		} catch {
 			/* ignore preview refresh error */
@@ -382,14 +471,15 @@
 	}
 
 	async function placeInMap() {
-		if (map.activeId === null || !generateView) return;
+		const targetMapId = map.activeId;
+		if (targetMapId === null || !generateView) return;
 		placing = true;
 		try {
 			const tx = Number(destX) || 0;
 			const ty = Number(destY) || 0;
 			const tz = Number(destZ) || 0;
-			const change = await HuntForgeService.PlaceInMap(map.activeId, tx, ty, tz, replaceTiles);
-			applyChange(map.activeId, change);
+			const change = await HuntForgeService.PlaceInMap(targetMapId, tx, ty, tz, replaceTiles);
+			applyChange(targetMapId, change);
 			goTo({
 				x: tx + Math.floor(generateView.result.width / 2),
 				y: ty + Math.floor(generateView.result.height / 2),
@@ -408,7 +498,8 @@
 	}
 
 	async function exportOTBM() {
-		if (map.activeId === null || !generateView) return;
+		const targetMapId = map.activeId;
+		if (targetMapId === null || !generateView) return;
 		const suggested = `${(selectedName || "hunt").replace(/[^a-zA-Z0-9_-]+/g, "_")}_${mode}.otbm`;
 		const path = await DialogService.SaveFile("huntForgeExport", "Exportar hunt (.otbm + spawn.xml)", suggested, [
 			{ name: "OTBM map (*.otbm)", pattern: "*.otbm" },
@@ -417,7 +508,7 @@
 		placing = true;
 		try {
 			const saved = await HuntForgeService.ExportOTBM(
-				map.activeId,
+				targetMapId,
 				path,
 				Number(destX) || 1000,
 				Number(destY) || 1000,
@@ -435,14 +526,20 @@
 		const img = event.currentTarget as HTMLImageElement;
 		srcNatW = img.naturalWidth;
 		srcNatH = img.naturalHeight;
-		if (!generateView) void fitPreview("source");
+		if (pendingFitSource) {
+			pendingFitSource = false;
+			if (!generateView) void fitPreview("source");
+		}
 	}
 
 	function onResultImageLoad(event: Event) {
 		const img = event.currentTarget as HTMLImageElement;
 		resNatW = img.naturalWidth;
 		resNatH = img.naturalHeight;
-		void fitPreview("result");
+		if (pendingFitResult) {
+			pendingFitResult = false;
+			void fitPreview("result");
+		}
 	}
 
 	function close() {
@@ -451,10 +548,12 @@
 
 	onMount(() => {
 		const anchor = map.huntForgeAnchor;
+		const originMapId = map.activeId;
 		map.huntForgeAnchor = null;
 
 		void (async () => {
-			await detectHunts();
+			const ok = await detectHunts(originMapId);
+			if (!ok || !mounted || userInteracted || map.activeId !== originMapId) return;
 
 			if (anchor) {
 				const hit = suggestions.find(
@@ -466,12 +565,13 @@
 						anchor.y <= s.region.y2,
 				);
 				if (hit) {
-					await pickSuggestion(hit);
+					await pickSuggestion(hit, false, originMapId);
 					return;
 				}
-				if (map.active?.selection && map.activeId !== null) {
+				if (map.active?.selection && originMapId !== null) {
 					try {
-						const reg = await HuntForgeService.SelectionRegion(map.activeId);
+						const reg = await HuntForgeService.SelectionRegion(originMapId);
+						if (!mounted || userInteracted || map.activeId !== originMapId) return;
 						if (
 							anchor.z >= reg.z1 &&
 							anchor.z <= reg.z2 &&
@@ -480,27 +580,37 @@
 							anchor.y >= reg.y1 &&
 							anchor.y <= reg.y2
 						) {
-							await useMapSelection();
+							await useMapSelection(false, originMapId);
 							return;
 						}
 					} catch {
 						/* fall back to area centered at anchor */
 					}
 				}
-				await useAreaAround(anchor.x, anchor.y, anchor.z, `Área (${anchor.x},${anchor.y},z${anchor.z})`);
+				if (!mounted || userInteracted || map.activeId !== originMapId) return;
+				await useAreaAround(
+					anchor.x,
+					anchor.y,
+					anchor.z,
+					`Área (${anchor.x},${anchor.y},z${anchor.z})`,
+					false,
+					originMapId,
+				);
 				return;
 			}
 
 			if (map.active?.selection) {
-				await useMapSelection();
+				await useMapSelection(false, originMapId);
 			} else if (suggestions.length > 0) {
-				await pickSuggestion(suggestions[0]);
+				await pickSuggestion(suggestions[0], false, originMapId);
 			}
 		})();
 	});
 
 	onDestroy(() => {
+		mounted = false;
 		clearDragListeners();
+		cancelWheelAnchor();
 		void HuntForgeService.Clear().catch(() => {});
 	});
 </script>
@@ -510,7 +620,12 @@
 		<aside class="hf-left">
 			<div class="hf-bar">
 				<input class="t-input grow" placeholder="Procurar monstro ou hunt…" bind:value={search} />
-				<button class="t-btn" disabled={detecting} onclick={detectHunts} title="Re-escanear monstros do mapa">
+				<button
+					class="t-btn"
+					disabled={detecting}
+					onclick={() => detectHunts()}
+					title="Re-escanear monstros do mapa"
+				>
 					{detecting ? "…" : "↻"}
 				</button>
 			</div>
@@ -522,7 +637,7 @@
 					title={map.active?.selection
 						? "Analisar a área atualmente selecionada no mapa"
 						: "Selecione uma área no mapa para usar este atalho"}
-					onclick={useMapSelection}
+					onclick={() => useMapSelection()}
 				>
 					Usar seleção
 				</button>
@@ -581,7 +696,7 @@
 					<label>y2<input class="t-input" type="number" bind:value={y2} /></label>
 					<label>z<input class="t-input" type="number" min="0" max="15" bind:value={z} /></label>
 				</div>
-				<button class="t-btn full" disabled={analyzing} onclick={analyzeCurrent}>
+				<button class="t-btn full" disabled={analyzing} onclick={() => analyzeCurrent()}>
 					{analyzing ? "Analisando…" : "Analisar esta área"}
 				</button>
 			</div>
@@ -656,32 +771,34 @@
 							class="hf-canvas"
 							class:panning
 							bind:this={srcCanvasEl}
-							onwheel={handleWheel}
+							onwheel={(e) => handleWheel(e, "source")}
 							onmousedown={(e) => startCanvasMouseDown(e, "source")}
 						>
 							{#if analyzing}
 								<div class="hf-empty">Analisando e renderizando sprites…</div>
 							{:else if analysisView?.preview}
 								<div class="hf-stage">
-									<img
-										bind:this={srcImgEl}
-										src={analysisView.preview}
-										alt="Original hunt"
-										draggable="false"
-										onload={onSourceImageLoad}
-										style={srcNatW > 0
-											? `width:${Math.max(1, Math.round(srcNatW * zoom))}px;height:${Math.max(1, Math.round(srcNatH * zoom))}px;`
-											: undefined}
-									/>
-								</div>
-								{#if cropBox}
-									<div
-										class="hf-crop"
-										style="left:{cropBox.x}px;top:{cropBox.y}px;width:{cropBox.w}px;height:{cropBox.h}px;"
-									>
-										<span>{cropBox.tiles}</span>
+									<div class="hf-img-wrap">
+										<img
+											bind:this={srcImgEl}
+											src={analysisView.preview}
+											alt="Original hunt"
+											draggable="false"
+											onload={onSourceImageLoad}
+											style={srcNatW > 0
+												? `width:${Math.max(1, Math.round(srcNatW * zoom))}px;height:${Math.max(1, Math.round(srcNatH * zoom))}px;`
+												: undefined}
+										/>
+										{#if cropBox}
+											<div
+												class="hf-crop"
+												style="left:{cropBox.x}px;top:{cropBox.y}px;width:{cropBox.w}px;height:{cropBox.h}px;"
+											>
+												<span>{cropBox.tiles}</span>
+											</div>
+										{/if}
 									</div>
-								{/if}
+								</div>
 							{:else}
 								<div class="hf-empty">
 									Escolha uma hunt à esquerda, selecione uma área no mapa ou clique com o botão
@@ -703,22 +820,25 @@
 							class="hf-canvas"
 							class:panning
 							bind:this={resCanvasEl}
-							onwheel={handleWheel}
+							onwheel={(e) => handleWheel(e, "result")}
 							onmousedown={(e) => startCanvasMouseDown(e, "result")}
 						>
 							{#if generating}
 								<div class="hf-empty">Gerando hunt e renderizando sprites…</div>
 							{:else if generateView?.preview}
 								<div class="hf-stage">
-									<img
-										src={generateView.preview}
-										alt="Generated hunt"
-										draggable="false"
-										onload={onResultImageLoad}
-										style={resNatW > 0
-											? `width:${Math.max(1, Math.round(resNatW * zoom))}px;height:${Math.max(1, Math.round(resNatH * zoom))}px;`
-											: undefined}
-									/>
+									<div class="hf-img-wrap">
+										<img
+											bind:this={resImgEl}
+											src={generateView.preview}
+											alt="Generated hunt"
+											draggable="false"
+											onload={onResultImageLoad}
+											style={resNatW > 0
+												? `width:${Math.max(1, Math.round(resNatW * zoom))}px;height:${Math.max(1, Math.round(resNatH * zoom))}px;`
+												: undefined}
+										/>
+									</div>
 								</div>
 							{:else}
 								<div class="hf-empty">
@@ -827,7 +947,11 @@
 					Nova seed a cada geração
 				</label>
 
-				<button class="t-btn primary full" disabled={!analysisView || generating} onclick={generateHunt}>
+				<button
+					class="t-btn primary full"
+					disabled={analyzing || !analysisView || generating}
+					onclick={generateHunt}
+				>
 					{generating ? "Gerando…" : "Gerar Hunt"}
 				</button>
 
@@ -1094,6 +1218,10 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+	}
+	.hf-img-wrap {
+		position: relative;
+		display: inline-block;
 	}
 	.hf-canvas img {
 		display: block;

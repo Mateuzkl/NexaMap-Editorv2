@@ -1168,7 +1168,7 @@ func (g *Generator) tileFromStack(ids []uint16) *otmap.Tile {
 	t := &otmap.Tile{}
 	for idx, id := range ids {
 		if idx == 0 {
-			if typ := g.a.DB.Get(id); typ != nil && typ.IsGround() {
+			if typ := g.a.DB.Get(id); isGroundType(typ) {
 				t.Ground = otmap.Item{ID: id}
 				continue
 			}
