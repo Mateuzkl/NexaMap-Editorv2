@@ -165,3 +165,17 @@ func TestRememberedServerIDsAskAgainWithoutItemsOTB(t *testing.T) {
 		t.Fatalf("plan without the items.otb = %+v", plan)
 	}
 }
+
+func TestIsIdentityClientOTB(t *testing.T) {
+	var idTypes, shiftedTypes []*otitems.Type
+	for i := uint16(100); i < 250; i++ {
+		idTypes = append(idTypes, &otitems.Type{ID: i, ClientID: i})
+		shiftedTypes = append(shiftedTypes, &otitems.Type{ID: i, ClientID: i + 100})
+	}
+	if !isIdentityClientOTB(otitems.NewDB(otitems.ModeOTB, idTypes)) {
+		t.Fatalf("expected 1:1 ServerID==ClientID OTB to be detected as identity ClientID OTB")
+	}
+	if isIdentityClientOTB(otitems.NewDB(otitems.ModeOTB, shiftedTypes)) {
+		t.Fatalf("expected traditional shifted OTB not to be detected as identity ClientID OTB")
+	}
+}

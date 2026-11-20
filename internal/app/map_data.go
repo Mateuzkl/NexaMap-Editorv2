@@ -462,6 +462,23 @@ func (data *mapData) filterBuiltinBrush(b *materials.Brush, borderMap map[uint32
 	return &out
 }
 
+func isIdentityClientOTB(db *otitems.DB) bool {
+	if db == nil || db.Mode != otitems.ModeOTB {
+		return false
+	}
+	total, same := 0, 0
+	db.Each(func(it *otitems.Type) {
+		if it.EffectiveID() == 0 || it.EffectiveClientID() == 0 {
+			return
+		}
+		total++
+		if it.EffectiveID() == it.EffectiveClientID() {
+			same++
+		}
+	})
+	return total >= 100 && same*10 >= total*9
+}
+
 func (data *mapData) buildEffectiveMaterials() *materials.Materials {
 	user := data.materials
 	if user == nil {
@@ -470,6 +487,9 @@ func (data *mapData) buildEffectiveMaterials() *materials.Materials {
 	var mode otitems.Mode = otitems.ModeOTB
 	if data.items != nil {
 		mode = data.items.Mode
+		if isIdentityClientOTB(data.items) {
+			mode = otitems.ModeClient
+		}
 	}
 	builtin, err := materials.BuiltinMaterials(mode)
 	if err != nil {
