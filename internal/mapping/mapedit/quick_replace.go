@@ -11,7 +11,7 @@ import (
 // QuickReplaceCandidate summarizes one distinct placed item inside a selection
 // or map for the Quick Replace Items dialog.
 type QuickReplaceCandidate struct {
-	ID       uint16 `json:"id"`
+	ID       uint32 `json:"id"`
 	Name     string `json:"name"`
 	Category string `json:"category"`
 	Count    int    `json:"count"`
@@ -20,7 +20,7 @@ type QuickReplaceCandidate struct {
 // QuickReplaceChoice is a suggested replacement target item scored against the
 // source item's category, item flags, brush family, and sprite appearance.
 type QuickReplaceChoice struct {
-	ID       uint16 `json:"id"`
+	ID       uint32 `json:"id"`
 	Name     string `json:"name"`
 	Category string `json:"category"`
 	Brush    string `json:"brush,omitempty"`
@@ -29,7 +29,7 @@ type QuickReplaceChoice struct {
 
 // ClassifyItem returns the Quick Replace architectural category for an item ID
 // (Floor, Border, Wall, Door, Carpet, Table, Doodad, or Item).
-func (e *Editor) ClassifyItem(id uint16) string {
+func (e *Editor) ClassifyItem(id uint32) string {
 	isGround := false
 	if it := e.itemType(id); it != nil && it.IsGround() {
 		isGround = true
@@ -48,7 +48,7 @@ var quickReplaceCategoryOrder = map[string]int{
 	"Item":   7,
 }
 
-func (e *Editor) classifyPlacedItem(isGround bool, id uint16) string {
+func (e *Editor) classifyPlacedItem(isGround bool, id uint32) string {
 	if isGround {
 		return "Floor"
 	}
@@ -97,8 +97,8 @@ func (e *Editor) CollectQuickReplaceCandidates(inSelection bool) []QuickReplaceC
 		cat   string
 		count int
 	}
-	byID := map[uint16]*entry{}
-	add := func(isGround bool, id uint16) {
+	byID := map[uint32]*entry{}
+	add := func(isGround bool, id uint32) {
 		if id == 0 {
 			return
 		}

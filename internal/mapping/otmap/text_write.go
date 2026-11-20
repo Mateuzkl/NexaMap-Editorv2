@@ -307,8 +307,8 @@ func appendCreature(out []byte, pos Position, creature Creature) []byte {
 	return append(out, '\n')
 }
 
-func (w *textWriter) meta(id uint16) bool {
-	itemType := w.items.Get(id)
+func (w *textWriter) meta(id uint32) bool {
+	itemType := lookupItem(w.items, id)
 	return itemType != nil && itemType.Flags.Has(otitems.FlagMeta)
 }
 
@@ -412,7 +412,7 @@ func (w *textWriter) item(out []byte, item *Item) ([]byte, error) {
 	return append(out, '}'), nil
 }
 
-func (w *textWriter) itemAttrs(out []byte, id uint16, ext *ItemExt) ([]byte, error) {
+func (w *textWriter) itemAttrs(out []byte, id uint32, ext *ItemExt) ([]byte, error) {
 	start := len(out)
 	out = append(out, '(')
 	key := func(name string) {

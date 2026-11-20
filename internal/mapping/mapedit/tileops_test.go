@@ -34,7 +34,7 @@ func tileopsEditor(t *testing.T) *Editor {
 func tileopsItems(ids ...uint16) []otmap.Item {
 	var items []otmap.Item
 	for _, id := range ids {
-		items = append(items, otmap.Item{ID: id})
+		items = append(items, otmap.Item{ID: uint32(id)})
 	}
 	return items
 }
@@ -43,7 +43,7 @@ func TestTopOrderOfItems(t *testing.T) {
 	e := tileopsEditor(t)
 	for _, testCase := range []struct {
 		name string
-		id   uint16
+		id   uint32
 		want uint8
 	}{
 		{"ground", grassA, 0},
@@ -65,10 +65,10 @@ func TestTopOrderOfItems(t *testing.T) {
 func TestAddItemStacksLikeTheServer(t *testing.T) {
 	for _, testCase := range []struct {
 		name       string
-		ground     uint16
+		ground     uint32
 		items      []uint16
-		add        uint16
-		wantGround uint16
+		add        uint32
+		wantGround uint32
 		wantItems  []uint16
 	}{
 		{"ground replaces the ground and keeps items", grassA, []uint16{stoneID}, sandID, sandID, []uint16{stoneID}},
@@ -248,7 +248,7 @@ func TestInRange(t *testing.T) {
 func TestNewItemGivesStackablesCountOne(t *testing.T) {
 	e := testEditor(t)
 	for _, testCase := range []struct {
-		id          uint16
+		id          uint32
 		wantSubtype uint16
 	}{{coinID, 1}, {stoneID, 0}, {9999, 0}} {
 		if got := e.newItem(testCase.id); got.ID != testCase.id || got.Subtype != testCase.wantSubtype {

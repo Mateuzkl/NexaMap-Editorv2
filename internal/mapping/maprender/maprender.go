@@ -28,7 +28,7 @@ type Scene struct {
 	Outfit func(creature string) materials.Outfit
 	// MarkedItems are items covered with a colored square (RGB) when
 	// ViewMarkedItems is on, by server id.
-	MarkedItems map[uint16][3]uint8
+	MarkedItems map[uint32][3]uint8
 }
 
 const MaxChunksPerRequest = 512

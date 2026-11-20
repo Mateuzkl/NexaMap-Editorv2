@@ -478,7 +478,7 @@ func (e *Editor) randomize(tx *Tx, pos otmap.Position) {
 	if brush == nil || !brush.randomize {
 		return
 	}
-	id := brush.items.pick(e.rng)
+	id := uint32(brush.items.pick(e.rng))
 	if id == 0 || id == current.Ground.ID {
 		return
 	}

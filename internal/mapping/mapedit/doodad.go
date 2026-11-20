@@ -31,7 +31,7 @@ type DoodadBuffer struct {
 }
 
 func itemFromSpec(spec materials.ItemSpec) otmap.Item {
-	item := otmap.Item{ID: spec.ID, Subtype: spec.Subtype}
+	item := otmap.Item{ID: uint32(spec.ID), Subtype: spec.Subtype}
 	if spec.ActionID != 0 || spec.UniqueID != 0 || spec.Text != "" {
 		item.Ext = &otmap.ItemExt{ActionID: spec.ActionID, UniqueID: spec.UniqueID, Text: spec.Text}
 	}
@@ -115,7 +115,7 @@ func (p *doodadPlacement) placeAt(x, y int) bool {
 		for _, compositeTile := range composite {
 			for _, spec := range compositeTile.Items {
 				p.put(x+compositeTile.X, y+compositeTile.Y, compositeTile.Z, itemFromSpec(spec))
-				if editor.isGround(spec.ID) {
+				if editor.isGround(uint32(spec.ID)) {
 					p.tiles[[3]int{x + compositeTile.X, y + compositeTile.Y, compositeTile.Z}].Replace = true
 				}
 			}

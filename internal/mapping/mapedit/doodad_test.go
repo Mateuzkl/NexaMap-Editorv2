@@ -24,14 +24,14 @@ func doodadSingleOf(id uint16, chance int) materials.Single {
 }
 
 func doodadPutTile(e *Editor, pos otmap.Position, ground uint16, items ...uint16) {
-	e.Map.SetTile(pos, &otmap.Tile{Ground: otmap.Item{ID: ground}, Items: tileopsItems(items...)})
+	e.Map.SetTile(pos, &otmap.Tile{Ground: otmap.Item{ID: uint32(ground)}, Items: tileopsItems(items...)})
 }
 
 func doodadGround(tile *otmap.Tile) uint16 {
 	if tile == nil {
 		return 0
 	}
-	return tile.Ground.ID
+	return uint16(tile.Ground.ID)
 }
 
 func doodadDraw(e *Editor, name string, pos otmap.Position, alt bool) {
@@ -208,7 +208,7 @@ func TestDoodadGeneratePicksAlternativeByVariation(t *testing.T) {
 	}})
 	for _, testCase := range []struct {
 		variation int
-		want      uint16
+		want      uint32
 	}{{0, stoneID}, {1, bagID}, {2, stoneID}, {-1, bagID}} {
 		buffer := e.GenerateDoodad("two", testCase.variation, 0, "square", 0)
 		if len(buffer.Tiles) != 1 || buffer.Tiles[0].Items[0].ID != testCase.want {
@@ -271,7 +271,7 @@ func TestDoodadGeneratePicksSingleByChance(t *testing.T) {
 	for _, testCase := range []struct {
 		name    string
 		singles []materials.Single
-		want    uint16
+		want    uint32
 	}{
 		{"only the single with a chance", []materials.Single{doodadSingleOf(stoneID, 0), doodadSingleOf(bagID, 3)}, bagID},
 		{"first single when no chances", []materials.Single{doodadSingleOf(stoneID, 0), doodadSingleOf(bagID, 0)}, stoneID},
@@ -295,7 +295,7 @@ func TestDoodadGeneratePicksCompositeByChance(t *testing.T) {
 	for _, testCase := range []struct {
 		name       string
 		composites []materials.Composite
-		want       uint16
+		want       uint32
 	}{
 		{"only the composite with a chance", []materials.Composite{composite(0, stoneID), composite(2, bagID)}, bagID},
 		{"first composite when no chances", []materials.Composite{composite(0, stoneID), composite(0, bagID)}, stoneID},

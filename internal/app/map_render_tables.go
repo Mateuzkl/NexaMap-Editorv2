@@ -44,7 +44,7 @@ func itemTable(items *otitems.DB, brushes *mapedit.Brushes) ItemTable {
 		kind := item.Kind
 		if kind == otitems.KindNone {
 			switch {
-			case item.IsDoor() || (brushes != nil && item.EffectiveID() <= 0xFFFF && brushes.IsDoor(item.ID)):
+			case item.IsDoor() || (brushes != nil && brushes.IsDoor(item.EffectiveID())):
 				kind = otitems.KindDoor
 			case item.IsTeleport():
 				kind = otitems.KindTeleport

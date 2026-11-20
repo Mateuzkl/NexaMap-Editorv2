@@ -9,8 +9,8 @@ import (
 
 // topOrder returns the stack order of an item: 1 borders, 2 bottom items,
 // 3 top items, 0 common items. Border items of materials count as 1.
-func (e *Editor) topOrder(id uint16) uint8 {
-	definition := e.Items.Get(id)
+func (e *Editor) topOrder(id uint32) uint8 {
+	definition := e.Items.Get32(id)
 	var order uint8
 	if definition != nil {
 		order = definition.TopOrder
@@ -21,12 +21,12 @@ func (e *Editor) topOrder(id uint16) uint8 {
 	return order
 }
 
-func (e *Editor) isGround(id uint16) bool {
-	definition := e.Items.Get(id)
+func (e *Editor) isGround(id uint32) bool {
+	definition := e.Items.Get32(id)
 	return definition != nil && definition.IsGround()
 }
 
-func (e *Editor) itemType(id uint16) *otitems.Type { return e.Items.Get(id) }
+func (e *Editor) itemType(id uint32) *otitems.Type { return e.Items.Get32(id) }
 
 // addItem puts an item on a tile like the server stacks it: ground replaces
 // the ground, bottom items go below common items ordered by their top
@@ -37,7 +37,7 @@ func (e *Editor) addItem(tile *otmap.Tile, item otmap.Item) {
 		return
 	}
 	if info := e.Brushes.info[item.ID]; info != nil && info.groundEquivalent != 0 {
-		tile.Ground = otmap.Item{ID: info.groundEquivalent}
+		tile.Ground = otmap.Item{ID: uint32(info.groundEquivalent)}
 		tile.Items = slices.Insert(tile.Items, 0, item)
 		return
 	}
@@ -58,7 +58,7 @@ func (e *Editor) addItem(tile *otmap.Tile, item otmap.Item) {
 
 // addBorderItem puts a border item at the bottom of the stack.
 func addBorderItem(tile *otmap.Tile, id uint16) {
-	tile.Items = slices.Insert(tile.Items, 0, otmap.Item{ID: id})
+	tile.Items = slices.Insert(tile.Items, 0, otmap.Item{ID: uint32(id)})
 }
 
 func (e *Editor) cleanBorders(tile *otmap.Tile) {
@@ -136,7 +136,7 @@ func posAt(x, y, z int) otmap.Position {
 func inRange(x, y int) bool { return x >= 0 && y >= 0 && x <= 0xFFFF && y <= 0xFFFF }
 
 // newItem creates an item, giving stackables a count of one.
-func (e *Editor) newItem(id uint16) otmap.Item {
+func (e *Editor) newItem(id uint32) otmap.Item {
 	item := otmap.Item{ID: id}
 	if definition := e.itemType(id); definition != nil && definition.Flags.Has(otitems.FlagStackable) {
 		item.Subtype = 1

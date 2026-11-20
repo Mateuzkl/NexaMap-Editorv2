@@ -778,14 +778,14 @@ func (p *sectorParser) item(c *cursor, depth int) (Item, error) {
 	if depth > maxContentsDepth {
 		return Item{}, c.errorf("containers nested deeper than %d", maxContentsDepth)
 	}
-	id, err := c.uint(math.MaxUint16)
+	id, err := c.uint(math.MaxUint32)
 	if err != nil {
 		return Item{}, err
 	}
 	if id == 0 {
 		return Item{}, c.errorf("item id 0")
 	}
-	item := Item{ID: uint16(id)}
+	item := Item{ID: uint32(id)}
 	if c.accept(':') {
 		if item.Subtype, err = c.u16(); err != nil {
 			return Item{}, err

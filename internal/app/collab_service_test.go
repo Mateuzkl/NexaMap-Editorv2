@@ -30,9 +30,9 @@ func waitFor(t *testing.T, what string, done func() bool) {
 	}
 }
 
-func groundAt(t *testing.T, ms *MapService, id int, pos otmap.Position) uint16 {
+func groundAt(t *testing.T, ms *MapService, id int, pos otmap.Position) uint32 {
 	t.Helper()
-	var ground uint16
+	var ground uint32
 	_ = ms.withMap(id, func(opened *openMap, _ *mapData) error {
 		if tile := opened.editor.Map.Tile(pos); tile != nil {
 			ground = tile.Ground.ID

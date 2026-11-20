@@ -242,8 +242,8 @@ func TestConcurrentEditsConverge(t *testing.T) {
 							continue
 						}
 						tile := tx.Edit(pos)
-						tile.Ground = otmap.Item{ID: uint16(100 + random.IntN(10))}
-						tile.Items = append(tile.Items, otmap.Item{ID: uint16(110 + random.IntN(30))})
+						tile.Ground = otmap.Item{ID: uint32(100 + random.IntN(10))}
+						tile.Items = append(tile.Items, otmap.Item{ID: uint32(110 + random.IntN(30))})
 					}
 					if random.IntN(20) == 0 {
 						tx.Meta()

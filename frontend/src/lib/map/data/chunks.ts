@@ -47,7 +47,7 @@ export interface TileData {
 	flags: number;
 	house: number;
 	/** Items bottom to top; the ground first when flags has TileFlags.ground. */
-	ids: Uint16Array;
+	ids: Uint32Array;
 	subs: Uint16Array;
 	itemFlags: Uint8Array;
 	creatures: CreatureData[] | null;
@@ -86,7 +86,8 @@ export function tileIndex(x: number, y: number): number {
 
 const decoder = new TextDecoder();
 
-const NO_IDS = new Uint16Array(0);
+const NO_IDS = new Uint32Array(0);
+const NO_SUBS = new Uint16Array(0);
 const NO_FLAGS = new Uint8Array(0);
 
 export function decodeChunks(buffer: ArrayBuffer): ChunkData[] {
@@ -96,9 +97,9 @@ export function decodeChunks(buffer: ArrayBuffer): ChunkData[] {
 	const out: ChunkData[] = [];
 	// The item arrays of all tiles are views into three shared buffers: an
 	// array buffer per tile costs several times its few bytes. An item takes
-	// at least 5 bytes of the response, which bounds the item count.
-	const room = Math.floor(buffer.byteLength / 5) + 1;
-	const allIds = new Uint16Array(room);
+	// at least 7 bytes of the response, which bounds the item count.
+	const room = Math.floor(buffer.byteLength / 7) + 1;
+	const allIds = new Uint32Array(room);
 	const allSubs = new Uint16Array(room);
 	const allFlags = new Uint8Array(room);
 	let itemCursor = 0;
@@ -118,14 +119,14 @@ export function decodeChunks(buffer: ArrayBuffer): ChunkData[] {
 			}
 			const itemCount = view.getUint8(offset++);
 			const ids = itemCount ? allIds.subarray(itemCursor, itemCursor + itemCount) : NO_IDS;
-			const subs = itemCount ? allSubs.subarray(itemCursor, itemCursor + itemCount) : NO_IDS;
+			const subs = itemCount ? allSubs.subarray(itemCursor, itemCursor + itemCount) : NO_SUBS;
 			const itemFlags = itemCount ? allFlags.subarray(itemCursor, itemCursor + itemCount) : NO_FLAGS;
 			itemCursor += itemCount;
 			for (let i = 0; i < itemCount; i++) {
-				ids[i] = view.getUint16(offset, true);
-				subs[i] = view.getUint16(offset + 2, true);
-				itemFlags[i] = view.getUint8(offset + 4);
-				offset += 5;
+				ids[i] = view.getUint32(offset, true);
+				subs[i] = view.getUint16(offset + 4, true);
+				itemFlags[i] = view.getUint8(offset + 6);
+				offset += 7;
 			}
 			let creatures: CreatureData[] | null = null;
 			if (flags & TileFlags.creatures) {

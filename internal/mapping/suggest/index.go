@@ -329,10 +329,15 @@ func (counter *blockCounter) count(gameMap *otmap.Map, block otmap.ChunkKey) *bl
 			counter.grounds[cell] = 0
 			start := len(counter.items)
 			if tile := gameMap.PeekAt(originX+column, originY+row, int(floor), &counter.scratch, counter.buffer); tile != nil {
-				counter.grounds[cell] = tile.Ground.ID
+				if tile.Ground.ID <= 0xFFFF {
+					counter.grounds[cell] = uint16(tile.Ground.ID)
+				}
 				for _, item := range tile.Items {
-					if item.ID != 0 && !counter.ignore(item.ID) && !slices.Contains(counter.items[start:], item.ID) {
-						counter.items = append(counter.items, item.ID)
+					if item.ID != 0 && item.ID <= 0xFFFF {
+						id16 := uint16(item.ID)
+						if !counter.ignore(id16) && !slices.Contains(counter.items[start:], id16) {
+							counter.items = append(counter.items, id16)
+						}
 					}
 				}
 			}

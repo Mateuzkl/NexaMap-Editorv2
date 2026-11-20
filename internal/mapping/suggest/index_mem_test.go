@@ -39,7 +39,7 @@ func TestIndexMemory(t *testing.T) {
 	var place Context
 	gameMap.Each(func(pos otmap.Position, tile *otmap.Tile) {
 		if place.Ground == 0 && pos.Z == 7 && tile.Ground.ID != 0 && len(tile.Items) > 0 {
-			place = Context{Pos: pos, Ground: tile.Ground.ID, Items: []uint16{tile.Items[0].ID}}
+			place = Context{Pos: pos, Ground: uint16(tile.Ground.ID), Items: []uint16{uint16(tile.Items[0].ID)}}
 		}
 	})
 	start = time.Now()

@@ -6,7 +6,7 @@ import (
 
 // Item is one item on the map. Subtype is the count, charges or fluid type.
 type Item struct {
-	ID       uint16   `json:"id"`
+	ID       uint32   `json:"id"`
 	Subtype  uint16   `json:"subtype"`
 	Selected bool     `json:"selected"`
 	Ext      *ItemExt `json:"ext,omitempty"`

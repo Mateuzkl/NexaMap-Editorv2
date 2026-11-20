@@ -22,35 +22,36 @@ const maxRotations = 8
 // door state, carpet or table part, doodad singles), its rotations and the
 // items with the same name and stack order. The family of a member can
 // differ, so callers step through the family of the item they started at.
-func (e *Editor) Variants(id uint16) []uint16 {
+func (e *Editor) Variants(id uint32) []uint32 {
 	itemType := e.itemType(id)
 	if itemType == nil {
 		return nil
 	}
-	family := []uint16{id}
-	add := func(candidate uint16) {
+	family := []uint32{id}
+	add := func(candidate uint32) {
 		if len(family) < maxVariants && candidate != 0 && !slices.Contains(family, candidate) && e.itemType(candidate) != nil {
 			family = append(family, candidate)
 		}
 	}
 	for _, candidate := range e.Brushes.siblings(id) {
-		add(candidate)
+		add(uint32(candidate))
 	}
-	for next, steps := itemType.RotateTo, 0; next != 0 && next != id && steps < maxRotations; steps++ {
+	for next, steps := itemType.EffectiveRotateTo(), 0; next != 0 && next != id && steps < maxRotations; steps++ {
 		add(next)
 		rotated := e.itemType(next)
 		if rotated == nil {
 			break
 		}
-		next = rotated.RotateTo
+		next = rotated.EffectiveRotateTo()
 	}
 	name := strings.ToLower(strings.TrimSpace(itemType.Name))
 	if name != "" {
-		var named []uint16
+		var named []uint32
 		e.Items.Each(func(other *otitems.Type) {
-			if other.ID != id && other.IsGround() == itemType.IsGround() && other.TopOrder == itemType.TopOrder &&
+			oid := other.EffectiveID()
+			if oid != id && other.IsGround() == itemType.IsGround() && other.TopOrder == itemType.TopOrder &&
 				!other.Flags.Has(otitems.FlagMeta) && strings.ToLower(strings.TrimSpace(other.Name)) == name {
-				named = append(named, other.ID)
+				named = append(named, oid)
 			}
 		})
 		slices.Sort(named)
@@ -62,7 +63,7 @@ func (e *Editor) Variants(id uint16) []uint16 {
 }
 
 // siblings returns the items that take the place of an item in its brush.
-func (b *Brushes) siblings(id uint16) []uint16 {
+func (b *Brushes) siblings(id uint32) []uint16 {
 	info := b.info[id]
 	if info == nil {
 		return nil
@@ -91,7 +92,7 @@ func (b *Brushes) siblings(id uint16) []uint16 {
 				singles = append(singles, single.item.ID)
 			}
 		}
-		if slices.Contains(singles, id) {
+		if id <= 0xFFFF && slices.Contains(singles, uint16(id)) {
 			return singles
 		}
 	}
@@ -138,11 +139,11 @@ func (b *Brushes) ItemsOf(name, kind string) []uint16 {
 
 // IsBorder reports whether an item is a border piece of a ground brush or
 // stacks as a border.
-func (b *Brushes) IsBorder(id uint16) bool { return b.isBorder(id) }
+func (b *Brushes) IsBorder(id uint32) bool { return b.isBorder(id) }
 
 // SwapItem replaces an item by another one, keeping its attributes.
 // Swaps with the same non-zero stroke merge into one undo step.
-func (e *Editor) SwapItem(ref ItemRef, id uint16, stroke int64) error {
+func (e *Editor) SwapItem(ref ItemRef, id uint32, stroke int64) error {
 	if e.itemType(id) == nil {
 		return fmt.Errorf("unknown item %d", id)
 	}
@@ -204,7 +205,7 @@ func (b *Brushes) AddMix(chances []materials.Chance) (string, error) {
 // PlacedItem is an item to put on a tile.
 type PlacedItem struct {
 	Pos  otmap.Position `json:"pos"`
-	Item uint16         `json:"item"`
+	Item uint32         `json:"item"`
 }
 
 // AddItems puts items on tiles in one undo step; items with the same

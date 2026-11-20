@@ -128,7 +128,7 @@ func wallsDraw(t *testing.T, editor *Editor, req DrawRequest) int {
 func wallsPut(editor *Editor, pos otmap.Position, ids ...uint16) *otmap.Tile {
 	tile := &otmap.Tile{}
 	for _, id := range ids {
-		tile.Items = append(tile.Items, otmap.Item{ID: id})
+		tile.Items = append(tile.Items, otmap.Item{ID: uint32(id)})
 	}
 	editor.Map.Put(pos, tile)
 	return tile
@@ -371,7 +371,7 @@ func TestWallHasWallFollowsRedirect(t *testing.T) {
 	brick := editor.Brushes.Wall("brick wall")
 	cases := []struct {
 		name  string
-		id    uint16
+		id    uint32
 		align int
 		want  bool
 	}{

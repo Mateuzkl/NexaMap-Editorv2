@@ -1088,7 +1088,7 @@ func TestRandomizeSelectionRerollsGroundsOfRandomBrushes(t *testing.T) {
 	e.Draw(DrawRequest{Kind: KindGround, Name: "sand", Points: points(at(48, 48))})
 	e.Map.SetTile(at(47, 47), &otmap.Tile{Items: []otmap.Item{{ID: stoneID}}})
 	e.SelectRect(*rect(47, 47, 52, 52), FloorsCurrent, false, false, false)
-	before := map[otmap.Position]uint16{}
+	before := map[otmap.Position]uint32{}
 	for _, pos := range e.Selected() {
 		before[pos] = e.Map.Tile(pos).Ground.ID
 	}

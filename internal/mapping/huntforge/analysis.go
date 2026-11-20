@@ -75,9 +75,9 @@ type Analysis struct {
 	Context5         map[int][]int
 	Context3         map[int][]int
 	CreatureAt       map[int]otmap.Creature
-	CommonDecoration map[uint16]bool
-	FillStack        []uint16
-	FloorStack       []uint16
+	CommonDecoration map[uint32]bool
+	FillStack        []uint32
+	FloorStack       []uint32
 }
 
 // Analyze inspects a Template on the chosen floor (floor < 0 picks the floor with most walkable tiles).
@@ -98,7 +98,7 @@ func Analyze(tpl *Template, db *otitems.DB, floor int) *Analysis {
 		Context5:         map[int][]int{},
 		Context3:         map[int][]int{},
 		CreatureAt:       map[int]otmap.Creature{},
-		CommonDecoration: map[uint16]bool{},
+		CommonDecoration: map[uint32]bool{},
 	}
 	for _, pt := range tpl.Tiles {
 		if pt.Z != floor || pt.X < 0 || pt.X >= w || pt.Y < 0 || pt.Y >= h {
@@ -142,12 +142,12 @@ func IsWalkable(tile *otmap.Tile, db *otitems.DB) bool {
 	if tile == nil || tile.Ground.ID == 0 {
 		return false
 	}
-	ground := db.Get(tile.Ground.ID)
+	ground := db.Get32(tile.Ground.ID)
 	if !isGroundType(ground) || ground.Flags.Has(otitems.FlagUnpassable) {
 		return false
 	}
 	for _, it := range tile.Items {
-		if typ := db.Get(it.ID); typ != nil && IsStructuralBlock(typ) {
+		if typ := db.Get32(it.ID); typ != nil && IsStructuralBlock(typ) {
 			return false
 		}
 	}
@@ -160,8 +160,8 @@ func IsStructuralBlock(it *otitems.Type) bool {
 }
 
 // IsStructural reports whether an item defines geometry (ground, border, wall) vs loose decoration.
-func (a *Analysis) IsStructural(id uint16) bool {
-	it := a.DB.Get(id)
+func (a *Analysis) IsStructural(id uint32) bool {
+	it := a.DB.Get32(id)
 	return it == nil || isGroundType(it) || it.IsBorder() || IsStructuralBlock(it)
 }
 
@@ -342,7 +342,7 @@ func (a *Analysis) fillSmallObstacles() int {
 				y2 = cy
 			}
 			gid := a.Tiles[c].Ground.ID
-			g := a.DB.Get(gid)
+			g := a.DB.Get32(gid)
 			if !isGroundType(g) || g.Flags.Has(otitems.FlagUnpassable) {
 				groundOk = false
 			}
@@ -793,7 +793,7 @@ func (a *Analysis) buildContexts() {
 	}
 }
 
-func tileAllItemIDs(t *otmap.Tile) []uint16 {
+func tileAllItemIDs(t *otmap.Tile) []uint32 {
 	if t == nil {
 		return nil
 	}
@@ -801,7 +801,7 @@ func tileAllItemIDs(t *otmap.Tile) []uint16 {
 	if t.Ground.ID != 0 {
 		n++
 	}
-	out := make([]uint16, 0, n)
+	out := make([]uint32, 0, n)
 	if t.Ground.ID != 0 {
 		out = append(out, t.Ground.ID)
 	}
@@ -830,7 +830,7 @@ func (a *Analysis) StructuralSignature(t *otmap.Tile) string {
 }
 
 func (a *Analysis) learnStacks() {
-	decoCount := map[uint16]int{}
+	decoCount := map[uint32]int{}
 	for _, t := range a.Tiles {
 		if t == nil {
 			continue
@@ -847,7 +847,7 @@ func (a *Analysis) learnStacks() {
 		}
 	}
 
-	mostCommon := func(filter func(int) bool) []uint16 {
+	mostCommon := func(filter func(int) bool) []uint32 {
 		type grp struct {
 			n int
 			t *otmap.Tile
@@ -874,7 +874,7 @@ func (a *Analysis) learnStacks() {
 		if best == nil {
 			return nil
 		}
-		var out []uint16
+		var out []uint32
 		for _, id := range tileAllItemIDs(best.t) {
 			if a.IsStructural(id) {
 				out = append(out, id)

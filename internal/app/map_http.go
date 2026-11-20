@@ -82,19 +82,19 @@ func (ms *MapService) scene(opened *openMap, data *mapData) *maprender.Scene {
 	}
 }
 
-func markedItemColors(editor *mapedit.Editor) map[uint16][3]uint8 {
+func markedItemColors(editor *mapedit.Editor) map[uint32][3]uint8 {
 	ids := editor.Settings.MarkedItems
 	if ids == nil {
 		ids = mapedit.DefaultMarkedItems(editor.Items.Mode)
 	}
-	colors := make(map[uint16][3]uint8, len(ids))
+	colors := make(map[uint32][3]uint8, len(ids))
 	for _, id := range ids {
 		colorIndex := uint8(markedItemDefaultColor)
 		if itemType := editor.Items.Get(id); itemType != nil && itemType.MinimapColor != 0 {
 			colorIndex = uint8(itemType.MinimapColor)
 		}
 		red, green, blue := mapedit.MinimapRGB(colorIndex)
-		colors[id] = [3]uint8{red, green, blue}
+		colors[uint32(id)] = [3]uint8{red, green, blue}
 	}
 	return colors
 }

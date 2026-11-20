@@ -325,7 +325,7 @@ func (e *Editor) applySpecific(ids []uint16, specific specificCase) []uint16 {
 	matches := 0
 	for _, id := range ids {
 		if specific.matchGroup > 0 {
-			if info := e.Brushes.info[id]; info != nil && info.borderGroup == specific.matchGroup && info.borderAlign == specific.groupAlign {
+			if info := e.Brushes.info[uint32(id)]; info != nil && info.borderGroup == specific.matchGroup && info.borderAlign == specific.groupAlign {
 				matches++
 				continue
 			}
@@ -381,9 +381,9 @@ func (e *Editor) reborder(tx *Tx, pos otmap.Position, full bool) {
 		prior = tx.Prior(pos)
 	}
 	dropOptional := newPlan.dropOptional && current != nil && current.State&otmap.StateOptionalBorder != 0
-	var drop func(uint16) bool
+	var drop func(uint32) bool
 	if full || e.groundBrushOf(prior) != self {
-		drop = func(id uint16) bool {
+		drop = func(id uint32) bool {
 			info := e.Brushes.info[id]
 			return info != nil && info.border
 		}
@@ -394,8 +394,12 @@ func (e *Editor) reborder(tx *Tx, pos otmap.Position, full bool) {
 		if !dropOptional && slices.Equal(oldPlan.ids, newPlan.ids) && oldPlan.dropOptional == newPlan.dropOptional {
 			return
 		}
-		drop = func(id uint16) bool {
-			return oldPlan.managed[id] || newPlan.managed[id] || slices.Contains(oldPlan.ids, id)
+		drop = func(id uint32) bool {
+			if id > 0xFFFF {
+				return false
+			}
+			id16 := uint16(id)
+			return oldPlan.managed[id16] || newPlan.managed[id16] || slices.Contains(oldPlan.ids, id16)
 		}
 	}
 	var currentItems []otmap.Item
@@ -424,7 +428,7 @@ func (e *Editor) reborder(tx *Tx, pos otmap.Position, full bool) {
 // restack returns items with the dropped border pieces at the bottom of
 // the stack replaced by ids. Kept borders go right above the new ones.
 // Pieces already there are reused, keeping their selection.
-func (e *Editor) restack(items []otmap.Item, ids []uint16, drop func(uint16) bool) []otmap.Item {
+func (e *Editor) restack(items []otmap.Item, ids []uint16, drop func(uint32) bool) []otmap.Item {
 	borderCount := 0
 	for borderCount < len(items) && e.Brushes.isBorder(items[borderCount].ID) {
 		borderCount++
@@ -439,8 +443,9 @@ func (e *Editor) restack(items []otmap.Item, ids []uint16, drop func(uint16) boo
 	}
 	restacked := make([]otmap.Item, 0, len(ids)+len(items))
 	for _, id := range ids {
-		item := otmap.Item{ID: id}
-		if i := slices.IndexFunc(spare, func(spareItem otmap.Item) bool { return spareItem.ID == id }); i >= 0 {
+		id32 := uint32(id)
+		item := otmap.Item{ID: id32}
+		if i := slices.IndexFunc(spare, func(spareItem otmap.Item) bool { return spareItem.ID == id32 }); i >= 0 {
 			item = spare[i]
 			spare = slices.Delete(spare, i, i+1)
 		}

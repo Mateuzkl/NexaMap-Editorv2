@@ -59,7 +59,7 @@ func (e *Editor) LearnBordersFromMap(onlyMissing bool) *WholeMapBorderReport {
 		}
 		has := false
 		if e.Brushes != nil {
-			if gb := e.Brushes.GroundOf(gid); gb != nil {
+			if gb := e.Brushes.GroundOf(uint32(gid)); gb != nil {
 				knownBrushName[gid] = gb.Name
 				has = len(gb.borders) > 0
 			}
@@ -82,7 +82,8 @@ func (e *Editor) LearnBordersFromMap(onlyMissing bool) *WholeMapBorderReport {
 		if c, ok := candClassCache[id]; ok {
 			return c
 		}
-		it := e.itemType(id)
+		id32 := uint32(id)
+		it := e.itemType(id32)
 		cls := candNormal
 		if it != nil {
 			if it.IsGround() || it.Flags.Has(otitems.FlagMeta) || it.IsDoor() || it.IsTeleport() ||
@@ -95,9 +96,9 @@ func (e *Editor) LearnBordersFromMap(onlyMissing bool) *WholeMapBorderReport {
 			}
 		}
 		if cls != candSkip && e.Brushes != nil {
-			if e.Brushes.isBorder(id) {
+			if e.Brushes.isBorder(id32) {
 				cls = candBorder
-			} else if w, _ := e.Brushes.wallOf(id); w != nil {
+			} else if w, _ := e.Brushes.wallOf(id32); w != nil {
 				cls = candSkip
 			}
 		}
@@ -141,18 +142,20 @@ func (e *Editor) LearnBordersFromMap(onlyMissing bool) *WholeMapBorderReport {
 		if e.Progress != nil && scanned&0xFFFF == 0 {
 			e.Progress(scanned, totalTiles*2)
 		}
-		if tile.Ground.ID != 0 {
-			distinctGrounds[tile.Ground.ID] = true
-			groundTileCount[tile.Ground.ID]++
-			if !isGroundKnownWithBorder(tile.Ground.ID) {
-				missingGrounds[tile.Ground.ID] = true
+		if tile.Ground.ID != 0 && tile.Ground.ID <= math.MaxUint16 {
+			gid := uint16(tile.Ground.ID)
+			distinctGrounds[gid] = true
+			groundTileCount[gid]++
+			if !isGroundKnownWithBorder(gid) {
+				missingGrounds[gid] = true
 				// Record adjacency to E and S neighbors (covers all undirected cardinal pairs once).
 				for _, off := range [2][2]int{{1, 0}, {0, 1}} {
 					nx, ny := int(pos.X)+off[0], int(pos.Y)+off[1]
 					if nx <= 0xFFFF && ny <= 0xFFFF {
-						if nt := e.Map.Peek(otmap.Position{X: uint16(nx), Y: uint16(ny), Z: pos.Z}, &peekTile, peekBuf[:0]); nt != nil && nt.Ground.ID != 0 && nt.Ground.ID != tile.Ground.ID {
-							if !isGroundKnownWithBorder(nt.Ground.ID) {
-								a, b := tile.Ground.ID, nt.Ground.ID
+						if nt := e.Map.Peek(otmap.Position{X: uint16(nx), Y: uint16(ny), Z: pos.Z}, &peekTile, peekBuf[:0]); nt != nil && nt.Ground.ID != 0 && nt.Ground.ID <= math.MaxUint16 && nt.Ground.ID != tile.Ground.ID {
+							ngid := uint16(nt.Ground.ID)
+							if !isGroundKnownWithBorder(ngid) {
+								a, b := gid, ngid
 								if a > b {
 									a, b = b, a
 								}
@@ -169,12 +172,16 @@ func (e *Editor) LearnBordersFromMap(onlyMissing bool) *WholeMapBorderReport {
 		var hostCands []uint16
 		hasStrictBorder := false
 		for _, item := range tile.Items {
-			cls := classifyCand(item.ID)
+			if item.ID > math.MaxUint16 {
+				continue
+			}
+			cid := uint16(item.ID)
+			cls := classifyCand(cid)
 			if cls == candBorder {
 				hasStrictBorder = true
 			}
 			if cls != candSkip {
-				hostCands = append(hostCands, item.ID)
+				hostCands = append(hostCands, cid)
 			}
 		}
 		if len(hostCands) == 0 {
@@ -193,7 +200,10 @@ func (e *Editor) LearnBordersFromMap(onlyMissing bool) *WholeMapBorderReport {
 		}
 
 		// Check if any neighbor differs in ground (or is empty) before saving this tile for Pass 2.
-		hostG := tile.Ground.ID
+		var hostG uint16
+		if tile.Ground.ID <= math.MaxUint16 {
+			hostG = uint16(tile.Ground.ID)
+		}
 		hasBoundary := false
 		for _, cd := range cardinalDirs {
 			off := neighbors8[cd.ni]
@@ -203,8 +213,8 @@ func (e *Editor) LearnBordersFromMap(onlyMissing bool) *WholeMapBorderReport {
 			}
 			nt := e.Map.Peek(otmap.Position{X: uint16(nx), Y: uint16(ny), Z: pos.Z}, &peekTile, peekBuf[:0])
 			var ng uint16
-			if nt != nil {
-				ng = nt.Ground.ID
+			if nt != nil && nt.Ground.ID <= math.MaxUint16 {
+				ng = uint16(nt.Ground.ID)
 			}
 			if ng == hostG {
 				continue
@@ -235,8 +245,8 @@ func (e *Editor) LearnBordersFromMap(onlyMissing bool) *WholeMapBorderReport {
 				}
 				nt := e.Map.Peek(otmap.Position{X: uint16(nx), Y: uint16(ny), Z: pos.Z}, &peekTile, peekBuf[:0])
 				var ng uint16
-				if nt != nil {
-					ng = nt.Ground.ID
+				if nt != nil && nt.Ground.ID <= math.MaxUint16 {
+					ng = uint16(nt.Ground.ID)
 				}
 				if ng != hostG {
 					hasBoundary = true
@@ -417,10 +427,10 @@ func (e *Editor) LearnBordersFromMap(onlyMissing bool) *WholeMapBorderReport {
 			e.Progress(totalTiles+idx*totalTiles/max(len(borderHostPositions), 1), totalTiles*2)
 		}
 		tile := e.Map.Peek(pos, &hostScratch, hostBuf[:0])
-		if tile == nil || tile.Ground.ID == 0 {
+		if tile == nil || tile.Ground.ID == 0 || tile.Ground.ID > math.MaxUint16 {
 			continue
 		}
-		hostFam, ok := gidToFam[tile.Ground.ID]
+		hostFam, ok := gidToFam[uint16(tile.Ground.ID)]
 		if !ok {
 			continue
 		}
@@ -429,12 +439,16 @@ func (e *Editor) LearnBordersFromMap(onlyMissing bool) *WholeMapBorderReport {
 		var cands []uint16
 		hasStrict := false
 		for _, item := range tile.Items {
-			cls := classifyCand(item.ID)
+			if item.ID > math.MaxUint16 {
+				continue
+			}
+			cid := uint16(item.ID)
+			cls := classifyCand(cid)
 			if cls == candBorder {
 				hasStrict = true
 			}
 			if cls != candSkip {
-				cands = append(cands, item.ID)
+				cands = append(cands, cid)
 			}
 		}
 		if len(cands) == 0 {
@@ -459,8 +473,8 @@ func (e *Editor) LearnBordersFromMap(onlyMissing bool) *WholeMapBorderReport {
 			nx, ny := int(pos.X)+off[0], int(pos.Y)+off[1]
 			nf := -1
 			if nx >= 0 && ny >= 0 && nx <= 0xFFFF && ny <= 0xFFFF {
-				if nt := e.Map.Peek(otmap.Position{X: uint16(nx), Y: uint16(ny), Z: pos.Z}, &peekTile, peekBuf[:0]); nt != nil && nt.Ground.ID != 0 {
-					if fIdx, found := gidToFam[nt.Ground.ID]; found {
+				if nt := e.Map.Peek(otmap.Position{X: uint16(nx), Y: uint16(ny), Z: pos.Z}, &peekTile, peekBuf[:0]); nt != nil && nt.Ground.ID != 0 && nt.Ground.ID <= math.MaxUint16 {
+					if fIdx, found := gidToFam[uint16(nt.Ground.ID)]; found {
 						nf = fIdx
 					}
 				}
@@ -596,7 +610,7 @@ func (e *Editor) LearnBordersFromMap(onlyMissing bool) *WholeMapBorderReport {
 		fam := families[k.fam]
 		name := fam.brushName
 		if name == "" {
-			if it := e.itemType(fam.primaryID); it != nil && strings.TrimSpace(it.Name) != "" {
+			if it := e.itemType(uint32(fam.primaryID)); it != nil && strings.TrimSpace(it.Name) != "" {
 				name = fmt.Sprintf("%s_%d", sanitizeBrushName(it.Name), fam.primaryID)
 			} else {
 				name = fmt.Sprintf("ground_%d", fam.primaryID)

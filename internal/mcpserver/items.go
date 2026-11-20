@@ -40,15 +40,30 @@ func uint16Arg(name string, value *int) (*uint16, error) {
 	return &converted, nil
 }
 
+// uint32Arg converts an optional 32-bit number argument.
+func uint32Arg(name string, value *int) (*uint32, error) {
+	if value == nil {
+		return nil, nil
+	}
+	if *value < 0 || int64(*value) > 0xFFFFFFFF {
+		return nil, fmt.Errorf("%s is out of range", name)
+	}
+	converted := uint32(*value)
+	return &converted, nil
+}
+
 func (attrs ItemAttrs) patch() (mapedit.ItemPatch, error) {
 	patch := mapedit.ItemPatch{Text: attrs.Text, Description: attrs.Description, ClearDest: attrs.ClearDest}
 	var err error
+	if patch.ID, err = uint32Arg("id", attrs.ID); err != nil {
+		return patch, err
+	}
 	for _, field := range []struct {
 		name   string
 		value  *int
 		target **uint16
 	}{
-		{"id", attrs.ID, &patch.ID}, {"subtype", attrs.Subtype, &patch.Subtype}, {"actionId", attrs.ActionID, &patch.ActionID},
+		{"subtype", attrs.Subtype, &patch.Subtype}, {"actionId", attrs.ActionID, &patch.ActionID},
 		{"uniqueId", attrs.UniqueID, &patch.UniqueID}, {"depotId", attrs.DepotID, &patch.DepotID},
 	} {
 		if *field.target, err = uint16Arg(field.name, field.value); err != nil {
@@ -148,7 +163,7 @@ func (s *Server) addItemTools(server *mcp.Server) {
 			if err != nil {
 				return nil, err
 			}
-			if args.Item <= 0 || args.Item > 0xFFFF {
+			if args.Item <= 0 || int64(args.Item) > 0xFFFFFFFF {
 				return nil, errors.New("bad item id")
 			}
 			patch, err := args.ItemAttrs.patch()
@@ -156,11 +171,11 @@ func (s *Server) addItemTools(server *mcp.Server) {
 				return nil, err
 			}
 			return s.edit(args.MapID, func(id int) (app.MapChange, error) {
-				change, err := s.maps.AddItem(id, pos, uint16(args.Item))
+				change, err := s.maps.AddItem(id, pos, uint32(args.Item))
 				if err != nil || args.ItemAttrs.empty() {
 					return change, err
 				}
-				index, err := s.itemIndex(id, pos, uint16(args.Item))
+				index, err := s.itemIndex(id, pos, uint32(args.Item))
 				if err != nil {
 					return change, err
 				}
@@ -224,10 +239,10 @@ func (s *Server) addItemTools(server *mcp.Server) {
 			if err != nil {
 				return nil, err
 			}
-			if args.Item <= 0 || args.Item > 0xFFFF {
+			if args.Item <= 0 || int64(args.Item) > 0xFFFFFFFF {
 				return nil, errors.New("bad item id")
 			}
-			return s.edit(args.MapID, func(id int) (app.MapChange, error) { return s.maps.AddToContainer(id, ref, uint16(args.Item)) })
+			return s.edit(args.MapID, func(id int) (app.MapChange, error) { return s.maps.AddToContainer(id, ref, uint32(args.Item)) })
 		})
 
 	addTool(server, "set_tile", "Sets the flags (protection zone...), house or zones of one tile. For many tiles draw with kind flag, house or zone.",
@@ -256,9 +271,12 @@ func (s *Server) addItemTools(server *mcp.Server) {
 				patch.HouseID = &house
 			}
 			if args.Zones != nil {
-				zones, err := itemIDs(args.Zones)
-				if err != nil {
-					return nil, errors.New("bad zone id")
+				zones := make([]uint16, 0, len(args.Zones))
+				for _, z := range args.Zones {
+					if z <= 0 || z > 0xFFFF {
+						return nil, errors.New("bad zone id")
+					}
+					zones = append(zones, uint16(z))
 				}
 				patch.Zones = &zones
 			}
@@ -316,7 +334,7 @@ func (s *Server) addItemTools(server *mcp.Server) {
 
 // itemIndex finds the index of the topmost item with an id on a tile (-1
 // for the ground).
-func (s *Server) itemIndex(id int, pos otmap.Position, item uint16) (int, error) {
+func (s *Server) itemIndex(id int, pos otmap.Position, item uint32) (int, error) {
 	tile, err := s.maps.Tile(id, pos)
 	if err != nil {
 		return 0, err

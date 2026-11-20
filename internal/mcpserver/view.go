@@ -256,13 +256,13 @@ func (s *Server) addViewTools(server *mcp.Server) {
 }
 
 // itemIDs checks item id arguments.
-func itemIDs(list []int) ([]uint16, error) {
-	out := make([]uint16, 0, len(list))
+func itemIDs(list []int) ([]uint32, error) {
+	out := make([]uint32, 0, len(list))
 	for _, id := range list {
-		if id <= 0 || id > 0xFFFF {
+		if id <= 0 || int64(id) > 0xFFFFFFFF {
 			return nil, fmt.Errorf("bad item id %d", id)
 		}
-		out = append(out, uint16(id))
+		out = append(out, uint32(id))
 	}
 	return out, nil
 }
@@ -373,8 +373,8 @@ func describeTiles(tiles []app.TileInfo, area image.Rectangle, floor int, more b
 		text.WriteString(" (borders left out)")
 	}
 	text.WriteByte('\n')
-	names := map[uint16]string{}
-	var order []uint16
+	names := map[uint32]string{}
+	var order []uint32
 	note := func(item app.TileItem) {
 		if _, ok := names[item.ID]; !ok {
 			names[item.ID] = item.Name

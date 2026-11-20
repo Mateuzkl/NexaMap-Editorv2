@@ -140,7 +140,7 @@ func (ms *MapService) indexInBackground(opened *openMap) {
 func suggestIgnore(editor *mapedit.Editor) func(id uint16) bool {
 	return func(id uint16) bool {
 		itemType := editor.Items.Get(id)
-		return itemType == nil || itemType.Flags.Has(otitems.FlagMeta) || editor.Brushes.IsBorder(id)
+		return itemType == nil || itemType.Flags.Has(otitems.FlagMeta) || editor.Brushes.IsBorder(uint32(id))
 	}
 }
 
@@ -151,19 +151,25 @@ func placeAt(editor *mapedit.Editor, pos otmap.Position, ignore func(id uint16) 
 	collect := func(tile *otmap.Tile) []uint16 {
 		var ids []uint16
 		for _, item := range tile.Items {
-			if !ignore(item.ID) {
-				ids = append(ids, item.ID)
+			if item.ID <= 0xFFFF && !ignore(uint16(item.ID)) {
+				ids = append(ids, uint16(item.ID))
 			}
 		}
 		return ids
 	}
 	if tile := editor.Map.PeekAt(int(pos.X), int(pos.Y), int(pos.Z), &scratch, buffer); tile != nil {
-		place.Ground = tile.Ground.ID
+		if tile.Ground.ID <= 0xFFFF {
+			place.Ground = uint16(tile.Ground.ID)
+		}
 		place.Items = collect(tile)
 	}
 	for direction, offset := range suggest.Offsets {
 		if tile := editor.Map.PeekAt(int(pos.X)+offset[0], int(pos.Y)+offset[1], int(pos.Z), &scratch, buffer); tile != nil {
-			place.Neighbors[direction] = suggest.Cell{Ground: tile.Ground.ID, Items: collect(tile)}
+			var gid uint16
+			if tile.Ground.ID <= 0xFFFF {
+				gid = uint16(tile.Ground.ID)
+			}
+			place.Neighbors[direction] = suggest.Cell{Ground: gid, Items: collect(tile)}
 		}
 	}
 	return place
@@ -177,7 +183,7 @@ func placeable(editor *mapedit.Editor, pos otmap.Position) func(id uint16) bool 
 	var blocked, hooks bool
 	if tile := editor.Map.PeekAt(int(pos.X), int(pos.Y), int(pos.Z), &scratch, nil); tile != nil {
 		for _, item := range tile.Items {
-			if itemType := editor.Items.Get(item.ID); itemType != nil {
+			if itemType := editor.Items.Get32(item.ID); itemType != nil {
 				blocked = blocked || itemType.Flags.Has(otitems.FlagUnpassable)
 				hooks = hooks || itemType.Flags&(otitems.FlagHookSouth|otitems.FlagHookEast) != 0
 			}
@@ -244,7 +250,7 @@ func (namer suggestionNamer) list(ranked []suggest.Ranked, grounds bool) []Sugge
 // duplicates: the brush of the item when it has one.
 func (namer suggestionNamer) suggestion(id uint16, reason string) (Suggestion, string) {
 	suggestion := Suggestion{Item: id, Reason: reason}
-	if name, kind := namer.brushes.BrushOf(id); name != "" {
+	if name, kind := namer.brushes.BrushOf(uint32(id)); name != "" {
 		suggestion.Brush, suggestion.Kind = name, kind
 		if look := namer.brushes.Look(name); look != 0 {
 			suggestion.Item = look
@@ -257,7 +263,7 @@ func (namer suggestionNamer) suggestion(id uint16, reason string) (Suggestion, s
 // fromTilesets suggests the doodads and items of the tilesets that hold
 // the brush of a ground, for a map that has no place alike yet.
 func (namer suggestionNamer) fromTilesets(ground uint16, fits func(id uint16) bool) []Suggestion {
-	groundBrush, kind := namer.brushes.BrushOf(ground)
+	groundBrush, kind := namer.brushes.BrushOf(uint32(ground))
 	if groundBrush == "" || kind != materials.TypeGround || namer.brushes.Materials == nil {
 		return nil
 	}
@@ -320,7 +326,7 @@ func (namer suggestionNamer) reason(entry suggest.Ranked, grounds bool) string {
 // Variants returns the items an item can be swapped for, the item first:
 // its family (see mapedit.Editor.Variants), then the items that take the
 // same places in the map, then the items that look alike.
-func (ms *MapService) Variants(id int, item uint16) (variants []uint16, err error) {
+func (ms *MapService) Variants(id int, item uint32) (variants []uint32, err error) {
 	opened, data, unlock, err := ms.read(id)
 	if err != nil {
 		return nil, err
@@ -331,14 +337,16 @@ func (ms *MapService) Variants(id int, item uint16) (variants []uint16, err erro
 	if len(family) == 0 {
 		return nil, nil
 	}
-	add := func(candidate uint16) {
+	add := func(candidate uint32) {
 		if len(family) < maxFamily && !slices.Contains(family, candidate) && sameClass(editor.Items, item, candidate) {
 			family = append(family, candidate)
 		}
 	}
 	ms.refreshSuggestions(opened)
-	for _, substitute := range opened.suggestions.Substitutes(item, substituteLimit) {
-		add(substitute.ID)
+	if item <= 0xFFFF {
+		for _, substitute := range opened.suggestions.Substitutes(uint16(item), substituteLimit) {
+			add(uint32(substitute.ID))
+		}
 	}
 	for _, alike := range ms.looks.alike(data, editor.Items, item) {
 		add(alike)
@@ -349,8 +357,8 @@ func (ms *MapService) Variants(id int, item uint16) (variants []uint16, err erro
 // sameClass reports whether two items can take each other's place: both
 // grounds or not, the same stack order, both blocking or not, both
 // hanging or not.
-func sameClass(items *otitems.DB, first, second uint16) bool {
-	left, right := items.Get(first), items.Get(second)
+func sameClass(items *otitems.DB, first, second uint32) bool {
+	left, right := items.Get32(first), items.Get32(second)
 	const flags = otitems.FlagGround | otitems.FlagUnpassable | otitems.FlagHangable
 	return left != nil && right != nil && left.TopOrder == right.TopOrder && left.Flags&flags == right.Flags&flags && !right.Flags.Has(otitems.FlagMeta)
 }
@@ -368,17 +376,18 @@ type spriteLook struct {
 type lookCache struct {
 	mu      sync.Mutex
 	project *project.Project
-	looks   map[uint16]spriteLook
+	looks   map[uint32]spriteLook
 }
 
-func (cache *lookCache) look(data *mapData, items *otitems.DB, id uint16) spriteLook {
+func (cache *lookCache) look(data *mapData, items *otitems.DB, id uint32) spriteLook {
 	if found, ok := cache.looks[id]; ok {
 		return found
 	}
 	var look spriteLook
-	if itemType := items.Get(id); itemType != nil && data.project != nil {
-		if object, err := data.project.Thing(thing.CategoryItem, uint32(itemType.ClientID)); err == nil {
-			if texture, err := data.project.Render(thing.CategoryItem, uint32(itemType.ClientID), project.ThumbnailPos(object)); err == nil {
+	if itemType := items.Get32(id); itemType != nil && data.project != nil {
+		cid := itemType.EffectiveClientID()
+		if object, err := data.project.Thing(thing.CategoryItem, cid); err == nil {
+			if texture, err := data.project.Render(thing.CategoryItem, cid, project.ThumbnailPos(object)); err == nil {
 				look = averageLook(texture.Pix, texture.Rect.Dx(), texture.Rect.Dy(), data.project.SpriteSize())
 			}
 		}
@@ -416,17 +425,17 @@ func lookDistance(left, right spriteLook) float64 {
 // visualScores returns a 0..1 visual similarity score against baseID for each
 // candidate item ID using cached sprite average color, opacity coverage, and
 // dimensions.
-func (cache *lookCache) visualScores(data *mapData, items *otitems.DB, baseID uint16, candidates []uint16) map[uint16]float64 {
+func (cache *lookCache) visualScores(data *mapData, items *otitems.DB, baseID uint32, candidates []uint32) map[uint32]float64 {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 	if cache.project != data.project || cache.looks == nil {
-		cache.project, cache.looks = data.project, map[uint16]spriteLook{}
+		cache.project, cache.looks = data.project, map[uint32]spriteLook{}
 	}
 	base := cache.look(data, items, baseID)
 	if !base.ok {
 		return nil
 	}
-	out := make(map[uint16]float64, len(candidates))
+	out := make(map[uint32]float64, len(candidates))
 	for _, cid := range candidates {
 		look := cache.look(data, items, cid)
 		if !look.ok {
@@ -448,31 +457,32 @@ func (cache *lookCache) visualScores(data *mapData, items *otitems.DB, baseID ui
 
 // alike returns the items near an item's id of its class and size that
 // look most like it, closest first.
-func (cache *lookCache) alike(data *mapData, items *otitems.DB, id uint16) []uint16 {
+func (cache *lookCache) alike(data *mapData, items *otitems.DB, id uint32) []uint32 {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 	if cache.project != data.project || cache.looks == nil {
-		cache.project, cache.looks = data.project, map[uint16]spriteLook{}
+		cache.project, cache.looks = data.project, map[uint32]spriteLook{}
 	}
 	base := cache.look(data, items, id)
 	if !base.ok {
 		return nil
 	}
 	type scored struct {
-		id       uint16
+		id       uint32
 		distance float64
 	}
 	var found []scored
-	for candidate := max(int(id)-alikeWindow, 1); candidate <= min(int(id)+alikeWindow, int(items.MaxID())); candidate++ {
-		if candidate == int(id) || !sameClass(items, id, uint16(candidate)) {
+	for candidate := max(int(id)-alikeWindow, 1); candidate <= min(int(id)+alikeWindow, int(items.MaxID32())); candidate++ {
+		cid := uint32(candidate)
+		if cid == id || !sameClass(items, id, cid) {
 			continue
 		}
-		look := cache.look(data, items, uint16(candidate))
+		look := cache.look(data, items, cid)
 		if !look.ok || look.width != base.width || look.height != base.height {
 			continue
 		}
 		if distance := lookDistance(base, look); distance <= maxAlikeDistance {
-			found = append(found, scored{uint16(candidate), distance})
+			found = append(found, scored{cid, distance})
 		}
 	}
 	slices.SortFunc(found, func(left, right scored) int {
@@ -481,7 +491,7 @@ func (cache *lookCache) alike(data *mapData, items *otitems.DB, id uint16) []uin
 		}
 		return int(left.id) - int(right.id)
 	})
-	out := make([]uint16, 0, alikeLimit)
+	out := make([]uint32, 0, alikeLimit)
 	for _, entry := range found[:min(alikeLimit, len(found))] {
 		out = append(out, entry.id)
 	}
@@ -490,31 +500,34 @@ func (cache *lookCache) alike(data *mapData, items *otitems.DB, id uint16) []uin
 
 // SwapItem replaces an item by another one; swaps with the same non-zero
 // stroke are one undo step.
-func (ms *MapService) SwapItem(id int, ref mapedit.ItemRef, item uint16, stroke int64) (MapChange, error) {
+func (ms *MapService) SwapItem(id int, ref mapedit.ItemRef, item uint32, stroke int64) (MapChange, error) {
 	return ms.editMap(id, func(editor *mapedit.Editor) error { return editor.SwapItem(ref, item, stroke) })
 }
 
 // Completions returns the parts missing around an item at a position: the
 // other parts of the object it belongs to, as the map shows them.
-func (ms *MapService) Completions(id int, pos otmap.Position, item uint16) (parts []mapedit.PlacedItem, err error) {
+func (ms *MapService) Completions(id int, pos otmap.Position, item uint32) (parts []mapedit.PlacedItem, err error) {
 	opened, _, unlock, err := ms.read(id)
 	if err != nil {
 		return nil, err
 	}
 	defer unlock()
+	if item > 0xFFFF {
+		return nil, nil
+	}
 	ms.refreshSuggestions(opened)
 	var scratch otmap.Tile
-	for _, part := range opened.suggestions.Completions(item) {
+	for _, part := range opened.suggestions.Completions(uint16(item)) {
 		offset := suggest.Offsets[part.Direction]
 		x, y := int(pos.X)+offset[0], int(pos.Y)+offset[1]
 		if x < 0 || y < 0 || x > 0xFFFF || y > 0xFFFF {
 			continue
 		}
 		tile := opened.editor.Map.PeekAt(x, y, int(pos.Z), &scratch, nil)
-		if tile != nil && slices.ContainsFunc(tile.Items, func(placed otmap.Item) bool { return placed.ID == part.ID }) {
+		if tile != nil && slices.ContainsFunc(tile.Items, func(placed otmap.Item) bool { return placed.ID == uint32(part.ID) }) {
 			continue
 		}
-		parts = append(parts, mapedit.PlacedItem{Pos: otmap.Position{X: uint16(x), Y: uint16(y), Z: pos.Z}, Item: part.ID})
+		parts = append(parts, mapedit.PlacedItem{Pos: otmap.Position{X: uint16(x), Y: uint16(y), Z: pos.Z}, Item: uint32(part.ID)})
 	}
 	return parts, nil
 }

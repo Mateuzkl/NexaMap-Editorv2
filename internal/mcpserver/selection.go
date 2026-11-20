@@ -169,12 +169,12 @@ func (s *Server) addSelectionTools(server *mcp.Server) {
 
 	addTool(server, "replace_items", "Replaces items by id on the whole map or the selection (to 0 removes them).",
 		func(_ context.Context, args replaceArgs) (any, error) {
-			from, to := make([]uint16, 0, len(args.Pairs)), make([]uint16, 0, len(args.Pairs))
+			from, to := make([]uint32, 0, len(args.Pairs)), make([]uint32, 0, len(args.Pairs))
 			for _, pair := range args.Pairs {
-				if pair.From <= 0 || pair.From > 0xFFFF || pair.To < 0 || pair.To > 0xFFFF {
+				if pair.From <= 0 || int64(pair.From) > 0xFFFFFFFF || pair.To < 0 || int64(pair.To) > 0xFFFFFFFF {
 					return nil, fmt.Errorf("bad item id pair %d -> %d", pair.From, pair.To)
 				}
-				from, to = append(from, uint16(pair.From)), append(to, uint16(pair.To))
+				from, to = append(from, uint32(pair.From)), append(to, uint32(pair.To))
 			}
 			return s.edit(args.MapID, func(id int) (app.MapChange, error) { return s.maps.Replace(id, from, to, args.InSelection) })
 		})

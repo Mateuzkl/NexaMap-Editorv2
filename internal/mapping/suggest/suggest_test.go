@@ -18,9 +18,9 @@ const (
 func ignoreBorder(id uint16) bool { return id == border }
 
 func put(gameMap *otmap.Map, x, y int, ground uint16, items ...uint16) {
-	tile := &otmap.Tile{Ground: otmap.Item{ID: ground}}
+	tile := &otmap.Tile{Ground: otmap.Item{ID: uint32(ground)}}
 	for _, id := range items {
-		tile.Items = append(tile.Items, otmap.Item{ID: id})
+		tile.Items = append(tile.Items, otmap.Item{ID: uint32(id)})
 	}
 	gameMap.SetTile(otmap.Position{X: uint16(x), Y: uint16(y), Z: mapFloor}, tile)
 }

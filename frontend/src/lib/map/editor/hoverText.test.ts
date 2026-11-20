@@ -10,7 +10,7 @@ function tile(change: Partial<TileData>): TileData {
 	return {
 		flags: 0,
 		house: 0,
-		ids: new Uint16Array(0),
+		ids: new Uint32Array(0),
 		subs: new Uint16Array(0),
 		itemFlags: new Uint8Array(0),
 		creatures: null,
@@ -30,7 +30,7 @@ describe("describeTile", () => {
 	it("names the top item, creatures, house and PZ", () => {
 		const houses = [{ id: 3, name: "Flat 1" }] as HouseInfo[];
 		const data = tile({
-			ids: Uint16Array.of(10, 20),
+			ids: Uint32Array.of(10, 20),
 			creatures: [{ name: "Rat" }, { name: "Cat" }] as TileData["creatures"],
 			house: 3,
 			flags: TileFlags.pz,

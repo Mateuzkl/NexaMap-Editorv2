@@ -100,7 +100,7 @@ func itemIDs(t *otmap.Tile) []uint16 {
 	}
 	var ids []uint16
 	for _, it := range t.Items {
-		ids = append(ids, it.ID)
+		ids = append(ids, uint16(it.ID))
 	}
 	return ids
 }

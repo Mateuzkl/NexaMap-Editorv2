@@ -2,6 +2,7 @@ package otmap
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"math"
 	"strings"
@@ -34,6 +35,9 @@ func writeOTBM(out io.Writer, gameMap *Map, items Items, format Format, progress
 	writeMapHeader(nodes, gameMap)
 	w := &writer{nodes: nodes, items: items, format: format}
 	w.tiles(gameMap, progress)
+	if w.err != nil {
+		return w.err
+	}
 	nodes.Start(nodeTowns)
 	for _, town := range gameMap.SortedTowns() {
 		nodes.Start(nodeTown)
@@ -88,6 +92,7 @@ type writer struct {
 	nodes  *otbnode.Writer
 	items  Items
 	format Format
+	err    error
 }
 
 func (w *writer) position(position Position) {
@@ -127,12 +132,25 @@ func (w *writer) tiles(gameMap *Map, progress func(done, total int)) {
 	}
 }
 
-func (w *writer) meta(id uint16) bool {
-	itemType := w.items.Get(id)
+func (w *writer) meta(id uint32) bool {
+	itemType := lookupItem(w.items, id)
 	return itemType != nil && itemType.Flags.Has(otitems.FlagMeta)
 }
 
+func (w *writer) checkID16(pos Position, id uint32) bool {
+	if id <= math.MaxUint16 {
+		return true
+	}
+	if w.err == nil {
+		w.err = fmt.Errorf("cannot save item ID %d at (%d, %d, %d): standard OTBM only supports 16-bit item IDs (0-65535); use Save As .otmap or replace IDs > 65535", id, pos.X, pos.Y, pos.Z)
+	}
+	return false
+}
+
 func (w *writer) tile(position Position, tile *Tile) {
+	if w.err != nil {
+		return
+	}
 	if tile.HouseID != 0 {
 		w.nodes.Start(nodeHouseTile)
 	} else {
@@ -149,15 +167,15 @@ func (w *writer) tile(position Position, tile *Tile) {
 	}
 	if ground := tile.Ground; ground.ID != 0 && !w.meta(ground.ID) {
 		if ground.Complex() || ground.Subtype != 0 {
-			w.item(&ground)
-		} else {
+			w.item(position, &ground)
+		} else if w.checkID16(position, ground.ID) {
 			w.nodes.U8(attrItem)
-			w.nodes.U16(ground.ID)
+			w.nodes.U16(uint16(ground.ID))
 		}
 	}
 	for i := range tile.Items {
 		if !w.meta(tile.Items[i].ID) {
-			w.item(&tile.Items[i])
+			w.item(position, &tile.Items[i])
 		}
 	}
 	if zones := tile.Zones(); len(zones) > 0 {
@@ -171,9 +189,12 @@ func (w *writer) tile(position Position, tile *Tile) {
 	w.nodes.End()
 }
 
-func (w *writer) item(item *Item) {
+func (w *writer) item(pos Position, item *Item) {
+	if !w.checkID16(pos, item.ID) {
+		return
+	}
 	w.nodes.Start(nodeItem)
-	w.nodes.U16(item.ID)
+	w.nodes.U16(uint16(item.ID))
 	if item.Subtype != 0 {
 		w.subtype(item)
 	}
@@ -181,7 +202,7 @@ func (w *writer) item(item *Item) {
 		w.itemExt(ext)
 		for i := range ext.Items {
 			if !w.meta(ext.Items[i].ID) {
-				w.item(&ext.Items[i])
+				w.item(pos, &ext.Items[i])
 			}
 		}
 	}
@@ -189,7 +210,7 @@ func (w *writer) item(item *Item) {
 }
 
 func (w *writer) subtype(item *Item) {
-	itemType := w.items.Get(item.ID)
+	itemType := lookupItem(w.items, item.ID)
 	if itemType != nil && itemType.Flags.Has(otitems.FlagCharges) && !itemType.Flags.Has(otitems.FlagStackable) {
 		w.nodes.U8(attrCharges)
 		w.nodes.U16(item.Subtype)

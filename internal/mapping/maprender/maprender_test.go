@@ -67,15 +67,15 @@ func TestEncodeChunks(t *testing.T) {
 	if house := binary.LittleEndian.Uint32(tile[4:]); house != 9 || tile[8] != 2 {
 		t.Fatalf("house %d, %d items", house, tile[8])
 	}
-	// ground: id, subtype, flags; then the item with ids and text.
-	if binary.LittleEndian.Uint16(tile[9:]) != 100 || binary.LittleEndian.Uint16(tile[14:]) != 101 || tile[18] != itemIDs|itemText {
-		t.Fatalf("items %v", tile[9:19])
+	// ground: u32 id, u16 subtype, u8 flags (7 bytes); then item with ids and text (7 bytes + u16 len + text).
+	if binary.LittleEndian.Uint32(tile[9:]) != 100 || binary.LittleEndian.Uint32(tile[16:]) != 101 || tile[22] != itemIDs|itemText {
+		t.Fatalf("items %v", tile[9:23])
 	}
-	if length := binary.LittleEndian.Uint16(tile[19:]); length != 5 || string(tile[21:26]) != "hello" {
-		t.Fatalf("text %q", tile[21:])
+	if length := binary.LittleEndian.Uint16(tile[23:]); length != 5 || string(tile[25:30]) != "hello" {
+		t.Fatalf("text %q", tile[25:])
 	}
 	// The missing chunk has no tiles.
-	if rest := tile[26:]; len(rest) != 6 || binary.LittleEndian.Uint16(rest[4:]) != 0 {
+	if rest := tile[30:]; len(rest) != 6 || binary.LittleEndian.Uint16(rest[4:]) != 0 {
 		t.Fatalf("empty chunk %v", rest)
 	}
 }
@@ -111,7 +111,7 @@ func TestBuildGeometryParts(t *testing.T) {
 
 func TestMarkedItems(t *testing.T) {
 	scene := testScene(t)
-	scene.MarkedItems = map[uint16][3]uint8{100: {255, 255, 0}}
+	scene.MarkedItems = map[uint32][3]uint8{100: {255, 255, 0}}
 	keys := []otmap.ChunkKey{otmap.MakeKey(0, 0, 7)}
 	quadsWith := func(viewFlags uint32) []byte {
 		parts, _, err := BuildGeometryParts(scene, keys, GeometryOptions{ViewFlags: viewFlags}, false)
@@ -277,5 +277,47 @@ func TestStackPattern(t *testing.T) {
 func TestUnitByte(t *testing.T) {
 	if unitByte(-1) != 0 || unitByte(0.5) != 128 || unitByte(2) != 255 {
 		t.Fatal("unitByte")
+	}
+}
+
+func TestUint32ExtendedItemEncodingAndGeometry(t *testing.T) {
+	const highID uint32 = 66625
+	items := otitems.NewDB(otitems.ModeOTB, []*otitems.Type{
+		{ID: 100, ClientID: 100, Flags: otitems.FlagGround},
+		{ID32: highID, ClientID32: highID},
+	})
+	m := otmap.New(64, 64)
+	pos := otmap.Position{X: 1, Y: 2, Z: 7}
+	m.SetTile(pos, &otmap.Tile{
+		Ground: otmap.Item{ID: 100},
+		Items:  []otmap.Item{{ID: highID}},
+	})
+	scene := &Scene{
+		Map: m, Items: items,
+		Things:     fakeThings{100: oneSpriteThing(7), highID: oneSpriteThing(99001)},
+		SpriteSize: 32,
+		IsBlocking: func(*otmap.Tile) bool { return false },
+		Outfit:     func(string) materials.Outfit { return materials.Outfit{} },
+	}
+	key := otmap.KeyOf(pos)
+	encoded := EncodeChunks(scene, []otmap.ChunkKey{key})
+	tile := encoded[6:]
+	// Tile header: u16 index (2) + u16 flags (2) + u8 itemCount (1) = 5 bytes (no house).
+	// Item 0 (ground): 7 bytes at tile[5..12]; Item 1 (66625): 7 bytes at tile[12..19].
+	if got := binary.LittleEndian.Uint32(tile[12:]); got != highID {
+		t.Fatalf("encoded high item ID = %d, want %d", got, highID)
+	}
+	parts, _, err := BuildGeometryParts(scene, []otmap.ChunkKey{key}, GeometryOptions{}, false)
+	if err != nil || len(parts) != 1 {
+		t.Fatalf("BuildGeometryParts: parts=%d err=%v", len(parts), err)
+	}
+	quads := binary.LittleEndian.Uint32(parts[0][4:])
+	sprites := binary.LittleEndian.Uint32(parts[0][16:])
+	if quads != 2 || sprites != 2 {
+		t.Fatalf("got %d quads / %d sprites, want 2 quads / 2 sprites (true 32-bit ClientID resolved)", quads, sprites)
+	}
+	itemQuad := parts[0][40:56]
+	if gotSprite := binary.LittleEndian.Uint32(itemQuad[4:]); gotSprite != 99001 {
+		t.Fatalf("high item sprite = %d, want 99001", gotSprite)
 	}
 }

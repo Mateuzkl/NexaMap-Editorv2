@@ -1161,14 +1161,14 @@ func (g *Generator) copyStack(src *otmap.Tile, keepAllDecoration bool) *otmap.Ti
 	return t
 }
 
-func (g *Generator) tileFromStack(ids []uint16) *otmap.Tile {
+func (g *Generator) tileFromStack(ids []uint32) *otmap.Tile {
 	if len(ids) == 0 {
 		return nil
 	}
 	t := &otmap.Tile{}
 	for idx, id := range ids {
 		if idx == 0 {
-			if typ := g.a.DB.Get(id); isGroundType(typ) {
+			if typ := g.a.DB.Get32(id); isGroundType(typ) {
 				t.Ground = otmap.Item{ID: id}
 				continue
 			}

@@ -12,7 +12,7 @@ func TestVariantsListBrushSiblingsFirst(t *testing.T) {
 	e := testEditor(t)
 	// Every fixture item is named "item", so the grounds of the same name
 	// follow the grass of the brush.
-	if got, want := e.Variants(grassB), []uint16{grassB, grassA, sandID}; !reflect.DeepEqual(got, want) {
+	if got, want := e.Variants(grassB), []uint32{grassB, grassA, sandID}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Variants(grassB) = %v, want %v", got, want)
 	}
 }
@@ -36,7 +36,7 @@ func TestVariantsFollowRotation(t *testing.T) {
 	e.Items.Get(tableH).Name = "chair east"
 	e.Items.Get(tableAloneID).RotateTo = tableH
 	e.Items.Get(tableH).RotateTo = tableAloneID
-	if got, want := e.Variants(tableAloneID), []uint16{tableAloneID, tableH}; !reflect.DeepEqual(got, want) {
+	if got, want := e.Variants(tableAloneID), []uint32{tableAloneID, tableH}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Variants(rotatable) = %v, want %v", got, want)
 	}
 }

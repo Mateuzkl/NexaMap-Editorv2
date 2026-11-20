@@ -122,7 +122,7 @@ func (e *Editor) LearnBorderFromSelection() (*LearnedBorderReport, error) {
 		var key, name string
 		known := false
 		if e.Brushes != nil {
-			if gb := e.Brushes.GroundOf(groundID); gb != nil {
+			if gb := e.Brushes.GroundOf(uint32(groundID)); gb != nil {
 				key = "brush:" + strings.ToLower(gb.Name)
 				name = gb.Name
 				known = true
@@ -130,7 +130,7 @@ func (e *Editor) LearnBorderFromSelection() (*LearnedBorderReport, error) {
 		}
 		if key == "" {
 			key = fmt.Sprintf("item:%d", groundID)
-			if it := e.itemType(groundID); it != nil && it.Name != "" {
+			if it := e.itemType(uint32(groundID)); it != nil && it.Name != "" {
 				name = fmt.Sprintf("%s (%d)", it.Name, groundID)
 			} else {
 				name = fmt.Sprintf("Ground %d", groundID)
@@ -159,12 +159,19 @@ func (e *Editor) LearnBorderFromSelection() (*LearnedBorderReport, error) {
 		if tile == nil {
 			continue
 		}
+		var groundID uint16
+		if tile.Ground.ID <= math.MaxUint16 {
+			groundID = uint16(tile.Ground.ID)
+		}
 		ct := capturedTile{
 			pos:      pos,
-			groundID: tile.Ground.ID,
-			family:   familyForGround(tile.Ground.ID),
+			groundID: groundID,
+			family:   familyForGround(groundID),
 		}
 		for idx, item := range tile.Items {
+			if item.ID > math.MaxUint16 {
+				continue
+			}
 			it := e.itemType(item.ID)
 			var top uint8
 			technical := false
@@ -183,7 +190,7 @@ func (e *Editor) LearnBorderFromSelection() (*LearnedBorderReport, error) {
 				}
 			}
 			ct.items = append(ct.items, capturedItem{
-				id:         item.ID,
+				id:         uint16(item.ID),
 				stackIndex: idx,
 				isBorder:   isBorder,
 				topOrder:   top,
@@ -197,8 +204,8 @@ func (e *Editor) LearnBorderFromSelection() (*LearnedBorderReport, error) {
 				continue
 			}
 			npos := otmap.Position{X: uint16(nx), Y: uint16(ny), Z: pos.Z}
-			if nt := e.Map.Tile(npos); nt != nil {
-				ct.neighborFams[ni] = familyForGround(nt.Ground.ID)
+			if nt := e.Map.Tile(npos); nt != nil && nt.Ground.ID <= math.MaxUint16 {
+				ct.neighborFams[ni] = familyForGround(uint16(nt.Ground.ID))
 			} else {
 				ct.neighborFams[ni] = -1
 			}
