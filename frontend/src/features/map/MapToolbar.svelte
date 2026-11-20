@@ -1,11 +1,49 @@
 <script lang="ts">
-	import { mapCommands } from "../../lib/map/view/commands";
+	import { goTo, mapCommands, spriteSize } from "../../lib/map/view/commands";
+	import { worldToTile } from "../../lib/map/view/coords";
 	import { keyLabel } from "../../lib/map/view/keys";
 	import { creatureOutfit, map, selectBrush, type BrushSel } from "../../lib/map/state.svelte";
 	import Icon from "../../lib/ui/Icon.svelte";
 	import Select from "../../lib/ui/Select.svelte";
 	import Slider from "../../lib/ui/Slider.svelte";
 	import ItemIcon from "./ItemIcon.svelte";
+
+	const towns = $derived((map.active?.towns ?? []).filter((town) => !!town));
+	const cityOptions = $derived([
+		{ value: "", label: "City" },
+		...towns.map((town) => ({ value: String(town.id), label: town.name || `Town ${town.id}` })),
+	]);
+	let selectedCity = $state("");
+	let navX = $state(0);
+	let navY = $state(0);
+	let navZ = $state(7);
+	let editingNav = false;
+
+	$effect(() => {
+		if (editingNav) return;
+		const tile = worldToTile(map.cam.x, map.cam.y, map.cam.floor, spriteSize());
+		navX = Math.max(0, Math.min(65535, tile.x));
+		navY = Math.max(0, Math.min(65535, tile.y));
+		navZ = map.cam.floor;
+	});
+
+	function jumpToCity(value: string) {
+		selectedCity = value;
+		if (!value) return;
+		const town = towns.find((candidate) => String(candidate.id) === value);
+		if (town?.temple) {
+			goTo(town.temple);
+		}
+		selectedCity = "";
+	}
+
+	function jumpToCoords() {
+		const x = Math.max(0, Math.min(65535, Math.trunc(Number(navX)) || 0));
+		const y = Math.max(0, Math.min(65535, Math.trunc(Number(navY)) || 0));
+		const z = Math.max(0, Math.min(15, Math.trunc(Number(navZ)) || 0));
+		editingNav = false;
+		goTo({ x, y, z });
+	}
 
 	const brush = $derived(map.brush);
 	const SUGGEST_PICK = "Click a tile to see what fits there";
@@ -235,6 +273,48 @@
 		</div>
 	{/if}
 	<span class="grow"></span>
+	{#if map.active}
+		<div class="grp nav" title="Jump to a town temple or exact X, Y, Z position">
+			{#if towns.length}
+				<Select value={selectedCity} width={110} options={cityOptions} onchange={jumpToCity} />
+			{/if}
+			<input
+				class="t-input coord"
+				type="number"
+				min="0"
+				max="65535"
+				title="X coordinate (Enter to go)"
+				bind:value={navX}
+				onfocus={() => (editingNav = true)}
+				onblur={() => (editingNav = false)}
+				onkeydown={(event) => event.key === "Enter" && jumpToCoords()}
+			/>
+			<input
+				class="t-input coord"
+				type="number"
+				min="0"
+				max="65535"
+				title="Y coordinate (Enter to go)"
+				bind:value={navY}
+				onfocus={() => (editingNav = true)}
+				onblur={() => (editingNav = false)}
+				onkeydown={(event) => event.key === "Enter" && jumpToCoords()}
+			/>
+			<input
+				class="t-input zcoord"
+				type="number"
+				min="0"
+				max="15"
+				title="Z floor (Enter to go)"
+				bind:value={navZ}
+				onfocus={() => (editingNav = true)}
+				onblur={() => (editingNav = false)}
+				onkeydown={(event) => event.key === "Enter" && jumpToCoords()}
+			/>
+			<button class="t-btn sm" title="Go to X, Y, Z" onclick={jumpToCoords}>Go</button>
+		</div>
+		<span class="t-vsep"></span>
+	{/if}
 	<div class="grp layers">
 		{#each LAYERS as group}
 			<div class="grp">
@@ -341,6 +421,12 @@
 	}
 	.n {
 		width: 46px;
+	}
+	.coord {
+		width: 52px;
+	}
+	.zcoord {
+		width: 34px;
 	}
 	.off {
 		opacity: 0.55;

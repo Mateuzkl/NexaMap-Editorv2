@@ -22,6 +22,7 @@ var mapTools = map[string]mapTool{
 	"randomizeMap":       {run: func(editor *mapedit.Editor, _ bool) int { return editor.RandomizeMap() }},
 	"removeCorpses":      {run: (*mapedit.Editor).RemoveCorpses},
 	"removeInvalid":      {run: (*mapedit.Editor).RemoveInvalid},
+	"removeDuplicates":   {run: (*mapedit.Editor).RemoveDuplicates},
 	"removeUnreachable":  {run: func(editor *mapedit.Editor, _ bool) int { return editor.RemoveUnreachable() }},
 	"removeEmptySpawns":  {run: func(editor *mapedit.Editor, _ bool) int { return editor.RemoveEmptySpawns() }},
 	"clearInvalidHouses": {run: func(editor *mapedit.Editor, _ bool) int { return editor.ClearInvalidHouses() }},

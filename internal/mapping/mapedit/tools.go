@@ -19,7 +19,7 @@ type FindQuery struct {
 	SpriteID uint32   `json:"spriteId,omitempty"`
 	Name     string   `json:"name"`
 	// Kind is "unique", "action", "container", "writeable", "teleport",
-	// "door", "duplicate" (same item twice on a tile) or "".
+	// "door", "duplicate" (same item twice on a tile), "emptySpawn" or "".
 	Kind string `json:"kind"`
 	// ActionID / UniqueID match exact ids (0 = any).
 	ActionID    uint16 `json:"actionId"`
@@ -54,6 +54,34 @@ func (e *Editor) Find(query FindQuery) ([]FindResult, bool) {
 				results = append(results, FindResult{Pos: pos, ID: duplicate.ID, Name: e.name(duplicate.ID), Detail: "duplicate"})
 			}
 			more = len(results) >= limit
+			return
+		}
+		if query.Kind == "emptySpawn" {
+			for _, npc := range []bool{false, true} {
+				spawn := tile.Spawn()
+				label := "Monster spawn"
+				if npc {
+					spawn = tile.SpawnNPC()
+					label = "NPC spawn"
+				}
+				if spawn == nil {
+					continue
+				}
+				found := false
+				radius := int(spawn.Radius)
+				e.Map.EachIn(int(pos.X)-radius, int(pos.Y)-radius, int(pos.X)+radius, int(pos.Y)+radius, int(pos.Z), int(pos.Z), func(_ otmap.Position, areaTile *otmap.Tile) {
+					if len(areaTile.Creatures()) > 0 {
+						found = true
+					}
+				})
+				if !found {
+					results = append(results, FindResult{Pos: pos, ID: 0, Name: label, Detail: fmt.Sprintf("empty · r=%d", radius)})
+					if len(results) >= limit {
+						more = true
+						return
+					}
+				}
+			}
 			return
 		}
 		var walk func(items []otmap.Item)
@@ -325,6 +353,40 @@ func (e *Editor) RemoveInvalid(inSelection bool) int {
 	return e.removeItemsWhere("Remove invalid items", inSelection, func(item otmap.Item) bool {
 		return item.ID != 0 && e.itemType(item.ID) == nil
 	})
+}
+
+// RemoveDuplicates removes plain stacked items that share an item ID already
+// present on the same tile (keeping the first occurrence and preserving items
+// with attributes/containers).
+func (e *Editor) RemoveDuplicates(inSelection bool) int {
+	tx := e.Begin("Remove duplicated items", 0)
+	removed := 0
+	e.eachTile(inSelection, func(pos otmap.Position, tile *otmap.Tile) {
+		if len(tile.Items) < 2 {
+			return
+		}
+		seen := make(map[uint16]bool, len(tile.Items))
+		kept := make([]otmap.Item, 0, len(tile.Items))
+		tileRemoved := 0
+		for _, item := range tile.Items {
+			if item.ID != 0 && !item.Complex() && seen[item.ID] {
+				tileRemoved++
+				continue
+			}
+			if item.ID != 0 {
+				seen[item.ID] = true
+			}
+			kept = append(kept, item)
+		}
+		if tileRemoved == 0 {
+			return
+		}
+		editTile := tx.Edit(pos)
+		editTile.Items = kept
+		removed += tileRemoved
+	})
+	tx.Commit()
+	return removed
 }
 
 func (e *Editor) RemoveEmptySpawns() int {

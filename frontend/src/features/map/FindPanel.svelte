@@ -22,6 +22,7 @@
 		{ value: "teleport", label: "Teleports" },
 		{ value: "door", label: "Doors" },
 		{ value: "duplicate", label: "Same item twice on a tile" },
+		{ value: "emptySpawn", label: "Empty spawn areas" },
 	];
 
 	type FindMode = "item" | "client" | "sprite";
@@ -59,10 +60,17 @@
 			findMode = "item";
 			ids = [...preset.ids];
 			name = "";
+			kind = "";
+		}
+		if (preset.kind) {
+			findMode = "item";
+			ids = [];
+			name = "";
+			kind = preset.kind;
 		}
 		inSelection = !!preset.inSelection && !!map.active?.selection;
 		if (preset.replace) replaceOpen = true;
-		if (preset.ids?.length && !preset.replace) void find();
+		if ((preset.ids?.length || preset.kind) && !preset.replace) void find();
 	});
 
 	const results = $derived(map.results);

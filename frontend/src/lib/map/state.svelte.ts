@@ -45,6 +45,7 @@ export type MapDialog =
 	| "text"
 	| "collab"
 	| "huntforge"
+	| "learnBorder"
 	| null;
 
 export type Focus =
@@ -74,6 +75,7 @@ const DEFAULT_CAMERA: Readonly<Camera> = { x: 0, y: 0, zoom: 1, floor: GROUND_FL
 
 const VIEW_KEY = "map:view";
 const BRUSH_KEY = "map:brush";
+const FAVORITES_KEY = "map:favorites";
 
 const DEFAULT_VIEW: ViewOptions = {
 	grid: false,
@@ -129,6 +131,7 @@ class MapState {
 	fill = $state(false);
 	reroll = $state(0);
 	recentBrushes = $state<BrushSel[]>([]);
+	favorites = $state<BrushSel[]>(loadJson(FAVORITES_KEY, []));
 	/** Item the library should show and scroll to (set by picking a brush from the map). */
 	revealItem = $state<{ id: number } | null>(null);
 	/** A brush picked from the map: the library shows its tab. */
@@ -145,7 +148,7 @@ class MapState {
 	focus = $state<Focus | null>(null);
 	side = $state<SidePanel>("library");
 	findOpen = $state(false);
-	findPreset = $state<{ ids?: number[]; inSelection?: boolean; replace?: boolean } | null>(null);
+	findPreset = $state<{ ids?: number[]; kind?: string; inSelection?: boolean; replace?: boolean } | null>(null);
 	results = $state.raw<{ title: string; items: FindResultRow[]; more: boolean } | null>(null);
 	/** Command palette: null closed, otherwise the text it opens with. */
 	command = $state<string | null>(null);
@@ -182,6 +185,7 @@ export const map = new MapState();
 $effect.root(() => {
 	$effect(() => saveJson(VIEW_KEY, map.view));
 	$effect(() => saveJson(BRUSH_KEY, { size: map.size, shape: map.shape }));
+	$effect(() => saveJson(FAVORITES_KEY, $state.snapshot(map.favorites)));
 });
 
 {
@@ -386,6 +390,22 @@ function brushKey(brush: BrushSel): string {
 
 export function isBrushActive(brush: BrushSel): boolean {
 	return !!map.brush && map.tool === "brush" && brushKey(map.brush) === brushKey(brush);
+}
+
+export function isFavoriteBrush(brush: BrushSel): boolean {
+	const key = brushKey(brush);
+	return map.favorites.some((fav) => brushKey(fav) === key);
+}
+
+export function toggleFavoriteBrush(brush: BrushSel): boolean {
+	const key = brushKey(brush);
+	const exists = map.favorites.some((fav) => brushKey(fav) === key);
+	if (exists) {
+		map.favorites = map.favorites.filter((fav) => brushKey(fav) !== key);
+		return false;
+	}
+	map.favorites = [brush, ...map.favorites].slice(0, 64);
+	return true;
 }
 
 export function creatureOutfit(name: string | undefined): number {

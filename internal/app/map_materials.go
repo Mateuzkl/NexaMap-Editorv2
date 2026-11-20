@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/nekiro/ots-creator/internal/fsutil"
+	"github.com/nekiro/ots-creator/internal/mapping/mapedit"
 	"github.com/nekiro/ots-creator/internal/mapping/materials"
+	"github.com/nekiro/ots-creator/internal/mapping/otmap"
 )
 
 func (ms *MapService) saveMaterials(data *mapData) error {
@@ -202,4 +205,152 @@ func (ms *MapService) DoodadFromSelection(id int, name string, tilesets []string
 		}
 		return nil
 	})
+}
+
+// LearnBorder analyzes the active map selection to infer 12-edge auto-borders.
+func (ms *MapService) LearnBorder(id int) (*mapedit.LearnedBorderReport, error) {
+	var report *mapedit.LearnedBorderReport
+	err := ms.withMapRead(id, func(opened *openMap, _ *mapData) error {
+		var err error
+		report, err = opened.editor.LearnBorderFromSelection()
+		return err
+	})
+	return report, err
+}
+
+// SaveLearnedBorder persists a learned border and attaches it to a ground brush
+// (creating or updating the brush in the "Learned Borders" collection) so it is
+// immediately active with auto-bordering on the map.
+func (ms *MapService) SaveLearnedBorder(name string, groundIDs []uint16, edges map[string]uint16, align, toTarget string, zOrder int) (borderID uint32, err error) {
+	cleanEdges := map[string]uint16{}
+	for edge, id := range edges {
+		if id != 0 {
+			cleanEdges[edge] = id
+		}
+	}
+	if len(cleanEdges) == 0 {
+		return 0, errors.New("at least one border edge item is required")
+	}
+	err = ms.editMaterials(func(materialSet *materials.Materials) error {
+		borderID = materialSet.SaveBorder(materials.Border{Edges: cleanEdges})
+		brushName := strings.TrimSpace(name)
+		if brushName == "" || len(groundIDs) == 0 {
+			return nil
+		}
+		if align != "inner" {
+			align = "outer"
+		}
+		if toTarget == "" {
+			if align == "inner" {
+				toTarget = "none"
+			} else {
+				toTarget = "all"
+			}
+		}
+		if zOrder <= 0 {
+			zOrder = 3500
+		}
+		var brush materials.Brush
+		oldName := ""
+		if existing := materialSet.Brush(brushName); existing != nil {
+			brush = *existing
+			oldName = existing.Name
+		} else {
+			brush = materials.Brush{
+				Name:   brushName,
+				Type:   materials.TypeGround,
+				Look:   groundIDs[0],
+				ZOrder: zOrder,
+			}
+			for _, gid := range groundIDs {
+				if gid != 0 {
+					brush.Items = append(brush.Items, materials.Chance{ID: gid, Chance: 100})
+				}
+			}
+		}
+		if brush.Look == 0 && len(groundIDs) > 0 {
+			brush.Look = groundIDs[0]
+		}
+		brush.Borders = append([]materials.BorderRule{{Align: align, To: toTarget, Border: borderID}}, brush.Borders...)
+		return materialSet.SaveBrush(oldName, brush, []string{"Learned Borders"})
+	})
+	return borderID, err
+}
+
+// ExportLearnedBorderXML writes a standalone RME-compatible XML definition for
+// the learned border and optional ground brush.
+func (ms *MapService) ExportLearnedBorderXML(path string, borderID uint32, name string, groundIDs []uint16, edges map[string]uint16, align, toTarget string, zOrder int) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", errors.New("no output file selected")
+	}
+	if borderID == 0 {
+		borderID = 1000
+	}
+	xmlText := mapedit.FormatLearnedBorderXML(materials.Border{ID: borderID, Edges: edges}, name, groundIDs, align, toTarget, zOrder)
+	if err := fsutil.WriteAtomic(path, []byte(xmlText)); err != nil {
+		return "", err
+	}
+	return filepath.Clean(path), nil
+}
+
+// ExportSelectionOTBM saves the current map selection as a standalone .otbm terrain file.
+func (ms *MapService) ExportSelectionOTBM(id int, path string) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", errors.New("no output file selected")
+	}
+	var savedPath string
+	err := ms.withMapRead(id, func(opened *openMap, data *mapData) error {
+		selected := opened.editor.Selected()
+		if len(selected) == 0 {
+			return errors.New("select terrain tiles first")
+		}
+		lo, hi, ok := opened.editor.SelectionBounds()
+		if !ok {
+			return errors.New("select terrain tiles first")
+		}
+		w := int(hi.X) - int(lo.X) + 1
+		h := int(hi.Y) - int(lo.Y) + 1
+		outMap := otmap.New(uint16(max(64, w+32)), uint16(max(64, h+32)))
+		outMap.ItemsMajor = opened.editor.Map.ItemsMajor
+		outMap.ItemsMinor = opened.editor.Map.ItemsMinor
+		outMap.SpawnFormat = opened.editor.Map.SpawnFormat
+		outMap.Description = fmt.Sprintf("Saved Terrain (%dx%d)", w, h)
+		const originX, originY = 10, 10
+		for _, pos := range selected {
+			src := opened.editor.Map.Tile(pos)
+			if src == nil {
+				continue
+			}
+			px := originX + (int(pos.X) - int(lo.X))
+			py := originY + (int(pos.Y) - int(lo.Y))
+			if px < 0 || py < 0 || px > 0xFFFF || py > 0xFFFF {
+				continue
+			}
+			t := src.Clone()
+			t.SetSelected(false)
+			t.Ground.Selected = false
+			for i := range t.Items {
+				t.Items[i].Selected = false
+			}
+			if t.Ext != nil {
+				for i := range t.Ext.Creatures {
+					t.Ext.Creatures[i].Selected = false
+				}
+				if t.Ext.Spawn != nil {
+					t.Ext.Spawn.Selected = false
+				}
+				if t.Ext.SpawnNPC != nil {
+					t.Ext.SpawnNPC.Selected = false
+				}
+			}
+			outMap.SetTile(otmap.Position{X: uint16(px), Y: uint16(py), Z: pos.Z}, t)
+		}
+		outMap.ForgetAuxFileNames()
+		if _, err := otmap.Save(path, outMap, data.items, opened.editor.Settings.Format()); err != nil {
+			return err
+		}
+		savedPath = filepath.Clean(path)
+		return nil
+	})
+	return savedPath, err
 }
