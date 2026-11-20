@@ -133,13 +133,17 @@ func Analyze(tpl *Template, db *otitems.DB, floor int) *Analysis {
 	return a
 }
 
+func isGroundType(it *otitems.Type) bool {
+	return it != nil && (it.IsGround() || it.Group == otitems.GroupGround)
+}
+
 // IsWalkable reports whether a tile is structurally walkable floor.
 func IsWalkable(tile *otmap.Tile, db *otitems.DB) bool {
 	if tile == nil || tile.Ground.ID == 0 {
 		return false
 	}
 	ground := db.Get(tile.Ground.ID)
-	if ground == nil || !ground.IsGround() || ground.Flags.Has(otitems.FlagUnpassable) {
+	if !isGroundType(ground) || ground.Flags.Has(otitems.FlagUnpassable) {
 		return false
 	}
 	for _, it := range tile.Items {
@@ -152,13 +156,13 @@ func IsWalkable(tile *otmap.Tile, db *otitems.DB) bool {
 
 // IsStructuralBlock identifies walls, mountain rocks, and blocking ground borders.
 func IsStructuralBlock(it *otitems.Type) bool {
-	return it.Flags.Has(otitems.FlagUnpassable) && (it.TopOrder == 2 || it.IsGround())
+	return it.Flags.Has(otitems.FlagUnpassable) && (it.TopOrder == 2 || isGroundType(it))
 }
 
 // IsStructural reports whether an item defines geometry (ground, border, wall) vs loose decoration.
 func (a *Analysis) IsStructural(id uint16) bool {
 	it := a.DB.Get(id)
-	return it == nil || it.IsGround() || it.IsBorder() || IsStructuralBlock(it)
+	return it == nil || isGroundType(it) || it.IsBorder() || IsStructuralBlock(it)
 }
 
 func pickMainFloor(tpl *Template, db *otitems.DB) int {
@@ -339,7 +343,7 @@ func (a *Analysis) fillSmallObstacles() int {
 			}
 			gid := a.Tiles[c].Ground.ID
 			g := a.DB.Get(gid)
-			if g == nil || !g.IsGround() || g.Flags.Has(otitems.FlagUnpassable) {
+			if !isGroundType(g) || g.Flags.Has(otitems.FlagUnpassable) {
 				groundOk = false
 			}
 		}

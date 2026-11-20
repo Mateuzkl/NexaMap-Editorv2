@@ -5,10 +5,18 @@
 	let {
 		title,
 		width = 420,
+		full = false,
 		onclose,
 		children,
 		footer,
-	}: { title: string; width?: number; onclose: () => void; children: Snippet; footer?: Snippet } = $props();
+	}: {
+		title: string;
+		width?: number;
+		full?: boolean;
+		onclose: () => void;
+		children: Snippet;
+		footer?: Snippet;
+	} = $props();
 
 	let box: HTMLDivElement;
 
@@ -38,8 +46,9 @@
 >
 	<div
 		class="t-window dialog"
+		class:full
 		transition:pop|global
-		style="width:{width}px"
+		style={full ? undefined : `width:${width}px`}
 		bind:this={box}
 		tabindex="-1"
 		role="dialog"
@@ -72,9 +81,23 @@
 		padding: 10px 12px 10px;
 		box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
 	}
+	.dialog.full {
+		width: calc(100vw - 24px);
+		height: calc(100vh - 24px);
+		max-width: none;
+		max-height: none;
+		display: flex;
+		flex-direction: column;
+	}
 	.content {
 		overflow: auto;
 		min-height: 0;
+	}
+	.dialog.full .content {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
 	}
 	.footer {
 		display: flex;

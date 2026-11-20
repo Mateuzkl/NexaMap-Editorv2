@@ -150,6 +150,8 @@ class MapState {
 	/** Command palette: null closed, otherwise the text it opens with. */
 	command = $state<string | null>(null);
 	dialog = $state<MapDialog>(null);
+	/** Tile right-clicked when opening Hunt Forge from the map context menu. */
+	huntForgeAnchor = $state.raw<Position | null>(null);
 	/** Item shown in the text dialog (index among the tile items, ground excluded). */
 	textItem = $state<{ pos: Position; index: number } | null>(null);
 	editBrush = $state<{ name: string; type: string } | null>(null);

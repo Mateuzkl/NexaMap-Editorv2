@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"path/filepath"
 	"sync"
 
 	"github.com/nekiro/ots-creator/internal/core/imaging"
 	"github.com/nekiro/ots-creator/internal/core/otitems"
+	"github.com/nekiro/ots-creator/internal/core/thing"
 	"github.com/nekiro/ots-creator/internal/mapping/huntforge"
 	"github.com/nekiro/ots-creator/internal/mapping/mapedit"
 	"github.com/nekiro/ots-creator/internal/mapping/maprender"
@@ -39,11 +41,13 @@ type HuntGenerateView struct {
 type HuntForgeService struct {
 	maps *MapService
 
-	mu       sync.Mutex
-	mapID    int
-	source   *huntforge.Template
-	analysis *huntforge.Analysis
-	result   *huntforge.Template
+	mu           sync.Mutex
+	mapID        int
+	sourceRegion huntforge.Region
+	analysisSeq  uint64
+	source       *huntforge.Template
+	analysis     *huntforge.Analysis
+	result       *huntforge.Template
 }
 
 func NewHuntForgeService(maps *MapService) *HuntForgeService {
@@ -53,7 +57,9 @@ func NewHuntForgeService(maps *MapService) *HuntForgeService {
 		maps.closed = append(maps.closed, func(closedID int) {
 			svc.mu.Lock()
 			if svc.mapID == closedID {
+				svc.analysisSeq++
 				svc.mapID = 0
+				svc.sourceRegion = huntforge.Region{}
 				svc.source = nil
 				svc.analysis = nil
 				svc.result = nil
@@ -68,7 +74,9 @@ func NewHuntForgeService(maps *MapService) *HuntForgeService {
 // Clear releases cached templates/analyses when the HuntForge dialog closes.
 func (hf *HuntForgeService) Clear() {
 	hf.mu.Lock()
+	hf.analysisSeq++
 	hf.mapID = 0
+	hf.sourceRegion = huntforge.Region{}
 	hf.source = nil
 	hf.analysis = nil
 	hf.result = nil
@@ -163,6 +171,11 @@ func (hf *HuntForgeService) Analyze(mapID int, region huntforge.Region, name str
 	if region.Width() > 512 || region.Height() > 512 {
 		return HuntAnalysisView{}, errors.New("region too large (maximum 512x512 tiles)")
 	}
+	hf.mu.Lock()
+	hf.analysisSeq++
+	seq := hf.analysisSeq
+	hf.mu.Unlock()
+
 	var view HuntAnalysisView
 	err := hf.maps.withMapRead(mapID, func(opened *openMap, data *mapData) error {
 		if name == "" {
@@ -179,10 +192,13 @@ func (hf *HuntForgeService) Analyze(mapID int, region huntforge.Region, name str
 		}
 
 		hf.mu.Lock()
-		hf.mapID = mapID
-		hf.source = tpl
-		hf.analysis = analysis
-		hf.result = nil
+		if hf.analysisSeq == seq {
+			hf.mapID = mapID
+			hf.sourceRegion = region
+			hf.source = tpl
+			hf.analysis = analysis
+			hf.result = nil
+		}
 		hf.mu.Unlock()
 
 		view = HuntAnalysisView{
@@ -194,23 +210,42 @@ func (hf *HuntForgeService) Analyze(mapID int, region huntforge.Region, name str
 		}
 		return nil
 	})
+	if err != nil {
+		hf.mu.Lock()
+		if hf.analysisSeq == seq {
+			hf.mapID = 0
+			hf.sourceRegion = huntforge.Region{}
+			hf.source = nil
+			hf.analysis = nil
+			hf.result = nil
+		}
+		hf.mu.Unlock()
+	}
 	return view, err
 }
 
 // Generate runs HuntForge synthesis on the last analyzed hunt (or re-analyzes region if needed).
 func (hf *HuntForgeService) Generate(mapID int, region huntforge.Region, name string, opts huntforge.Options, showMonsters bool) (HuntGenerateView, error) {
+	region = region.Normalized()
 	hf.mu.Lock()
 	analysis := hf.analysis
-	sameMap := hf.mapID == mapID
+	sameSource := hf.mapID == mapID && hf.sourceRegion == region
 	hf.mu.Unlock()
 
-	if analysis == nil || !sameMap {
+	if analysis == nil || !sameSource {
 		if _, err := hf.Analyze(mapID, region, name, showMonsters); err != nil {
 			return HuntGenerateView{}, err
 		}
 		hf.mu.Lock()
-		analysis = hf.analysis
+		if hf.mapID == mapID && hf.sourceRegion == region {
+			analysis = hf.analysis
+		} else {
+			analysis = nil
+		}
 		hf.mu.Unlock()
+		if analysis == nil {
+			return HuntGenerateView{}, errors.New("analysis was superseded by another request")
+		}
 	}
 
 	res := huntforge.Generate(analysis, opts)
@@ -324,8 +359,8 @@ func renderTemplatePreview(tpl *huntforge.Template, floor int, opened *openMap, 
 		return "", 1, nil
 	}
 
-	// For compact hunts (<= 96x96 tiles) with loaded client sprites, render real game sprites!
-	if w*h <= 96*96 && data != nil && data.project != nil {
+	// Render real client sprites up to 160x160 tiles (stitching <=128x128 blocks when needed).
+	if w <= 160 && h <= 160 && data != nil && data.project != nil {
 		tempMap := tpl.ToMap(otmap.Position{X: 0, Y: 0, Z: 0}, opened.editor.Map)
 		scene := &maprender.Scene{
 			Map:          tempMap,
@@ -344,11 +379,9 @@ func renderTemplatePreview(tpl *huntforge.Template, floor int, opened *openMap, 
 		if showMonsters {
 			opts.ViewFlags = maprender.ViewCreatures
 		}
-		if img, err := maprender.RenderImage(scene, image.Rect(0, 0, w, h), floor, opts); err == nil {
-			tilePx := scene.SpriteSize
-			// Downscale very large sprite renders so PNG transfer stays snappy (< 1280px).
-			if img.Bounds().Dx() > 1280 || img.Bounds().Dy() > 1280 {
-				img, tilePx = downsampleNRGBA(img, tilePx, 1280)
+		if img, tilePx, err := renderTiledSpriteImage(scene, w, h, floor, opts, 1600); err == nil {
+			if showMonsters {
+				drawMissingCreatureBadges(img, tpl, floor, w, h, data, opened.editor.Items)
 			}
 			pngBytes, err := imaging.EncodePNG(img)
 			if err != nil {
@@ -358,13 +391,13 @@ func renderTemplatePreview(tpl *huntforge.Template, floor int, opened *openMap, 
 		}
 	}
 
-	// Fast high-contrast minimap/topology renderer for large hunts (works at any size).
-	scale := 4
+	// Fast high-contrast minimap/topology renderer for huge hunts (> 160x160 tiles).
+	scale := 5
 	if max(w, h) > 220 {
-		scale = 3
+		scale = 4
 	}
 	if max(w, h) > 360 {
-		scale = 2
+		scale = 3
 	}
 	img := renderMinimapTemplate(tpl, floor, opened.editor, opened.editor.Items, scale, showMonsters)
 	pngBytes, err := imaging.EncodePNG(img)
@@ -372,6 +405,152 @@ func renderTemplatePreview(tpl *huntforge.Template, floor int, opened *openMap, 
 		return "", 0, err
 	}
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes), scale, nil
+}
+
+// renderTiledSpriteImage renders real client sprites into an image bounded by maxDim
+// on either axis without allocating an oversized full-resolution buffer in RAM.
+func renderTiledSpriteImage(scene *maprender.Scene, w, h, floor int, opts maprender.GeometryOptions, maxDim int) (*image.NRGBA, int, error) {
+	spriteSize := max(1, scene.SpriteSize)
+	fullW, fullH := w*spriteSize, h*spriteSize
+	factor := 1
+	for fullW/factor > maxDim || fullH/factor > maxDim {
+		factor++
+	}
+	if factor == 1 && w*h <= maprender.MaxImageTiles {
+		img, err := maprender.RenderImage(scene, image.Rect(0, 0, w, h), floor, opts)
+		return img, spriteSize, err
+	}
+
+	dstW, dstH := max(1, fullW/factor), max(1, fullH/factor)
+	dst := image.NewNRGBA(image.Rect(0, 0, dstW, dstH))
+	for i := 3; i < len(dst.Pix); i += 4 {
+		dst.Pix[i] = 0xFF
+	}
+
+	// Choose a block size that keeps each temporary sprite block small (<= ~16 MiB)
+	// and aligned to integer tile boundaries.
+	block := 64
+	if spriteSize >= 48 {
+		block = 32
+	}
+	for y0 := 0; y0 < h; y0 += block {
+		y1 := min(h, y0+block)
+		for x0 := 0; x0 < w; x0 += block {
+			x1 := min(w, x0+block)
+			part, err := maprender.RenderImage(scene, image.Rect(x0, y0, x1, y1), floor, opts)
+			if err != nil {
+				return nil, 0, err
+			}
+			blitDownsampledBlock(dst, part, x0*spriteSize, y0*spriteSize, factor)
+		}
+	}
+	return dst, max(1, spriteSize/factor), nil
+}
+
+func blitDownsampledBlock(dst, src *image.NRGBA, originX, originY, factor int) {
+	sw, sh := src.Bounds().Dx(), src.Bounds().Dy()
+	dw, dh := dst.Bounds().Dx(), dst.Bounds().Dy()
+	dxStart := originX / factor
+	dyStart := originY / factor
+	dxEnd := min(dw, (originX+sw+factor-1)/factor)
+	dyEnd := min(dh, (originY+sh+factor-1)/factor)
+
+	for dy := dyStart; dy < dyEnd; dy++ {
+		sy0 := max(0, dy*factor-originY)
+		sy1 := min(sh, (dy+1)*factor-originY)
+		if sy0 >= sy1 {
+			continue
+		}
+		for dx := dxStart; dx < dxEnd; dx++ {
+			sx0 := max(0, dx*factor-originX)
+			sx1 := min(sw, (dx+1)*factor-originX)
+			if sx0 >= sx1 {
+				continue
+			}
+			var r, g, b, a, count uint32
+			for sy := sy0; sy < sy1; sy++ {
+				rowOff := sy*src.Stride + sx0*4
+				for sx := sx0; sx < sx1; sx++ {
+					off := rowOff + (sx-sx0)*4
+					r += uint32(src.Pix[off])
+					g += uint32(src.Pix[off+1])
+					b += uint32(src.Pix[off+2])
+					a += uint32(src.Pix[off+3])
+					count++
+				}
+			}
+			if count > 0 {
+				dst.SetNRGBA(dx, dy, color.NRGBA{
+					R: uint8(r / count),
+					G: uint8(g / count),
+					B: uint8(b / count),
+					A: uint8(a / count),
+				})
+			}
+		}
+	}
+}
+
+func creatureHasVisibleSprite(name string, data *mapData, items *otitems.DB) bool {
+	if data == nil || data.project == nil {
+		return false
+	}
+	outfit, known := data.outfit(name)
+	if !known {
+		return false
+	}
+	if outfit.LookItem != 0 {
+		if items == nil {
+			return false
+		}
+		typ := items.Get(outfit.LookItem)
+		if typ == nil || typ.ClientID == 0 {
+			return false
+		}
+		th, err := data.project.Thing(thing.CategoryItem, uint32(typ.ClientID))
+		return err == nil && th != nil
+	}
+	if outfit.LookType == 0 {
+		return false
+	}
+	th, err := data.project.Thing(thing.CategoryOutfit, uint32(outfit.LookType))
+	return err == nil && th != nil
+}
+
+func drawMissingCreatureBadges(img *image.NRGBA, tpl *huntforge.Template, floor, cols, rows int, data *mapData, items *otitems.DB) {
+	if cols <= 0 || rows <= 0 {
+		return
+	}
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	scaleX := float64(w) / float64(cols)
+	scaleY := float64(h) / float64(rows)
+	rad := max(2, int(math.Round(min(scaleX, scaleY)/4.5)))
+	dot := color.NRGBA{255, 86, 118, 255}
+	rim := color.NRGBA{15, 10, 20, 255}
+	for _, pc := range tpl.Creatures {
+		if pc.Z != floor {
+			continue
+		}
+		if creatureHasVisibleSprite(pc.Creature.Name, data, items) {
+			continue
+		}
+		cx := int(math.Round((float64(pc.X) + 0.5) * scaleX))
+		cy := int(math.Round((float64(pc.Y) + 0.5) * scaleY))
+		for dy := -rad - 1; dy <= rad+1; dy++ {
+			for dx := -rad - 1; dx <= rad+1; dx++ {
+				px, py := cx+dx, cy+dy
+				if px < 0 || py < 0 || px >= w || py >= h {
+					continue
+				}
+				d2 := dx*dx + dy*dy
+				if d2 <= rad*rad {
+					img.SetNRGBA(px, py, dot)
+				} else if d2 <= (rad+1)*(rad+1) {
+					img.SetNRGBA(px, py, rim)
+				}
+			}
+		}
+	}
 }
 
 func renderMinimapTemplate(tpl *huntforge.Template, floor int, editor *mapedit.Editor, db *otitems.DB, scale int, showMonsters bool) *image.NRGBA {
@@ -428,22 +607,4 @@ func renderMinimapTemplate(tpl *huntforge.Template, floor int, editor *mapedit.E
 		}
 	}
 	return img
-}
-
-func downsampleNRGBA(src *image.NRGBA, tilePx, maxDim int) (*image.NRGBA, int) {
-	bw, bh := src.Bounds().Dx(), src.Bounds().Dy()
-	factor := 2
-	for bw/factor > maxDim || bh/factor > maxDim {
-		factor++
-	}
-	nw, nh := max(1, bw/factor), max(1, bh/factor)
-	dst := image.NewNRGBA(image.Rect(0, 0, nw, nh))
-	for y := 0; y < nh; y++ {
-		sy := y * factor
-		for x := 0; x < nw; x++ {
-			sx := x * factor
-			dst.SetNRGBA(x, y, src.NRGBAAt(sx, sy))
-		}
-	}
-	return dst, max(1, tilePx/factor)
 }
