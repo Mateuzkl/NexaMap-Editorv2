@@ -267,6 +267,201 @@ func (data *mapData) resolveBrushLook(brush *materials.Brush, fallback uint16) u
 	return 0
 }
 
+func (data *mapData) filterBuiltinBorder(b *materials.Border, assignedID uint32) *materials.Border {
+	if b == nil {
+		return nil
+	}
+	edges := make(map[string]uint16, len(b.Edges))
+	for edge, id := range b.Edges {
+		if data.hasItem(id) {
+			edges[edge] = id
+		}
+	}
+	if len(edges) == 0 {
+		return nil
+	}
+	groundEq := b.GroundEquivalent
+	if groundEq != 0 && !data.hasItem(groundEq) {
+		groundEq = 0
+	}
+	return &materials.Border{
+		ID:               assignedID,
+		Group:            b.Group,
+		Edges:            edges,
+		GroundEquivalent: groundEq,
+		Optional:         b.Optional,
+	}
+}
+
+func (data *mapData) filterBorderRule(rule materials.BorderRule, borderMap map[uint32]uint32) (materials.BorderRule, bool) {
+	out := rule
+	if out.Border != 0 {
+		mapped, ok := borderMap[out.Border]
+		if !ok {
+			return materials.BorderRule{}, false
+		}
+		out.Border = mapped
+	}
+	if out.Inline != nil {
+		filteredInline := data.filterBuiltinBorder(out.Inline, 0)
+		if filteredInline == nil {
+			return materials.BorderRule{}, false
+		}
+		out.Inline = filteredInline
+	}
+	if len(out.Specific) > 0 {
+		var filteredCases []materials.SpecificCase
+		for _, sc := range out.Specific {
+			ok := true
+			conds := make([]materials.Condition, 0, len(sc.Conditions))
+			for _, c := range sc.Conditions {
+				if c.Border != 0 {
+					mapped, exists := borderMap[c.Border]
+					if !exists {
+						ok = false
+						break
+					}
+					c.Border = mapped
+				}
+				if c.Item != 0 && !data.hasItem(c.Item) {
+					ok = false
+					break
+				}
+				conds = append(conds, c)
+			}
+			if !ok {
+				continue
+			}
+			acts := make([]materials.Action, 0, len(sc.Actions))
+			for _, a := range sc.Actions {
+				if a.Border != 0 {
+					mapped, exists := borderMap[a.Border]
+					if !exists {
+						ok = false
+						break
+					}
+					a.Border = mapped
+				}
+				if (a.Item != 0 && !data.hasItem(a.Item)) || (a.With != 0 && !data.hasItem(a.With)) {
+					ok = false
+					break
+				}
+				acts = append(acts, a)
+			}
+			if ok && len(conds) > 0 && len(acts) > 0 {
+				filteredCases = append(filteredCases, materials.SpecificCase{Conditions: conds, Actions: acts})
+			}
+		}
+		out.Specific = filteredCases
+	}
+	return out, out.Border != 0 || out.Inline != nil
+}
+
+func (data *mapData) filterBuiltinBrush(b *materials.Brush, borderMap map[uint32]uint32) *materials.Brush {
+	if b == nil {
+		return nil
+	}
+	out := *b
+	out.Items = nil
+	out.Borders = nil
+	out.Optional = nil
+	out.Walls = nil
+	out.Parts = nil
+	out.Alternatives = nil
+
+	for _, ch := range b.Items {
+		if data.hasItem(ch.ID) {
+			out.Items = append(out.Items, ch)
+		}
+	}
+	if b.Optional != nil {
+		if rule, ok := data.filterBorderRule(*b.Optional, borderMap); ok {
+			out.Optional = &rule
+		}
+	}
+	for _, br := range b.Borders {
+		if rule, ok := data.filterBorderRule(br, borderMap); ok {
+			out.Borders = append(out.Borders, rule)
+		}
+	}
+	if len(b.Walls) > 0 {
+		walls := make(map[string]*materials.WallPart, len(b.Walls))
+		for align, part := range b.Walls {
+			if part == nil {
+				continue
+			}
+			fp := &materials.WallPart{}
+			for _, ch := range part.Items {
+				if data.hasItem(ch.ID) {
+					fp.Items = append(fp.Items, ch)
+				}
+			}
+			for _, door := range part.Doors {
+				if data.hasItem(door.ID) {
+					fp.Doors = append(fp.Doors, door)
+				}
+			}
+			if len(fp.Items) > 0 || len(fp.Doors) > 0 {
+				walls[align] = fp
+			}
+		}
+		if len(walls) > 0 {
+			out.Walls = walls
+		}
+	}
+	if len(b.Parts) > 0 {
+		parts := make(map[string][]materials.Chance, len(b.Parts))
+		for align, list := range b.Parts {
+			var filtered []materials.Chance
+			for _, ch := range list {
+				if data.hasItem(ch.ID) {
+					filtered = append(filtered, ch)
+				}
+			}
+			if len(filtered) > 0 {
+				parts[align] = filtered
+			}
+		}
+		if len(parts) > 0 {
+			out.Parts = parts
+		}
+	}
+	for _, alt := range b.Alternatives {
+		var fa materials.Alternative
+		for _, single := range alt.Singles {
+			if data.hasItem(single.Item.ID) {
+				fa.Singles = append(fa.Singles, single)
+			}
+		}
+		for _, comp := range alt.Composites {
+			allValid := len(comp.Tiles) > 0
+			for _, tile := range comp.Tiles {
+				for _, item := range tile.Items {
+					if !data.hasItem(item.ID) {
+						allValid = false
+						break
+					}
+				}
+				if !allValid {
+					break
+				}
+			}
+			if allValid {
+				fa.Composites = append(fa.Composites, comp)
+			}
+		}
+		if len(fa.Singles) > 0 || len(fa.Composites) > 0 {
+			out.Alternatives = append(out.Alternatives, fa)
+		}
+	}
+
+	out.Look = data.resolveBrushLook(&out, b.Look)
+	if out.Look == 0 {
+		return nil
+	}
+	return &out
+}
+
 func (data *mapData) buildEffectiveMaterials() *materials.Materials {
 	user := data.materials
 	if user == nil {
@@ -276,7 +471,18 @@ func (data *mapData) buildEffectiveMaterials() *materials.Materials {
 	if data.items != nil {
 		mode = data.items.Mode
 	}
-	builtin := materials.BuiltinMaterials(mode)
+	builtin, err := materials.BuiltinMaterials(mode)
+	if err != nil {
+		msg := "built-in brushes: " + err.Error()
+		if !slices.Contains(data.warnings, msg) {
+			data.warnings = append(data.warnings, msg)
+		}
+	}
+
+	// Skip the bundled Tibia/RME catalog only on tiny synthetic projects
+	// (e.g. minimal 3-item test fixtures), never on real OT/Tibia clients.
+	useBuiltin := builtin != nil && data.items != nil && data.items.Count() >= 16
+
 	eff := &materials.Materials{
 		Version:   materials.FormatVersion,
 		Borders:   make([]*materials.Border, 0, len(user.Borders)+len(builtin.Borders)),
@@ -286,38 +492,51 @@ func (data *mapData) buildEffectiveMaterials() *materials.Materials {
 		MetaItems: make([]uint16, 0, len(user.MetaItems)+len(builtin.MetaItems)),
 	}
 
+	userBorders := make(map[uint32]bool, len(user.Borders))
+	var maxBorderID uint32
+	for _, b := range user.Borders {
+		eff.Borders = append(eff.Borders, b)
+		userBorders[b.ID] = true
+		if b.ID > maxBorderID {
+			maxBorderID = b.ID
+		}
+	}
+
+	borderMap := map[uint32]uint32{}
+	if useBuiltin {
+		for _, b := range builtin.Borders {
+			if b.ID > maxBorderID {
+				maxBorderID = b.ID
+			}
+		}
+		nextBorderID := maxBorderID + 1
+		for _, b := range builtin.Borders {
+			assignedID := b.ID
+			if userBorders[assignedID] {
+				assignedID = nextBorderID
+				nextBorderID++
+			}
+			filtered := data.filterBuiltinBorder(b, assignedID)
+			if filtered == nil {
+				continue
+			}
+			eff.Borders = append(eff.Borders, filtered)
+			borderMap[b.ID] = assignedID
+		}
+	}
+
 	userBrushes := make(map[string]bool, len(user.Brushes))
 	for _, b := range user.Brushes {
 		eff.Brushes = append(eff.Brushes, b)
 		userBrushes[strings.ToLower(b.Name)] = true
 	}
-
-	// Only layer the bundled Tibia/RME catalog when the loaded client actually
-	// contains a matching item set (avoids polluting tiny synthetic projects).
-	var matchedBuiltin []*materials.Brush
-	for _, b := range builtin.Brushes {
-		if userBrushes[strings.ToLower(b.Name)] {
-			continue
-		}
-		if data.resolveBrushLook(b, b.Look) == 0 {
-			continue
-		}
-		matchedBuiltin = append(matchedBuiltin, b)
-	}
-	useBuiltin := len(matchedBuiltin) >= 5
 	if useBuiltin {
-		eff.Brushes = append(eff.Brushes, matchedBuiltin...)
-	}
-
-	userBorders := make(map[uint32]bool, len(user.Borders))
-	for _, b := range user.Borders {
-		eff.Borders = append(eff.Borders, b)
-		userBorders[b.ID] = true
-	}
-	if useBuiltin {
-		for _, b := range builtin.Borders {
-			if !userBorders[b.ID] {
-				eff.Borders = append(eff.Borders, b)
+		for _, b := range builtin.Brushes {
+			if userBrushes[strings.ToLower(b.Name)] {
+				continue
+			}
+			if filtered := data.filterBuiltinBrush(b, borderMap); filtered != nil {
+				eff.Brushes = append(eff.Brushes, filtered)
 			}
 		}
 	}
@@ -344,7 +563,7 @@ func (data *mapData) buildEffectiveMaterials() *materials.Materials {
 	}
 	if useBuiltin {
 		for _, id := range builtin.MetaItems {
-			if !seenMeta[id] && data.items != nil && data.items.Get(id) != nil {
+			if !seenMeta[id] && data.items.Get(id) != nil {
 				seenMeta[id] = true
 				eff.MetaItems = append(eff.MetaItems, id)
 			}

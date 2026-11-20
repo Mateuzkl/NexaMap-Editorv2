@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"math"
 	"strings"
 
@@ -12,6 +13,8 @@ type PaletteBrush struct {
 	Kind string `json:"kind"`
 	// Look is the server id of the item shown.
 	Look uint16 `json:"look"`
+	// Builtin is true for bundled NexaMap brushes that have not been customized by the user.
+	Builtin bool `json:"builtin,omitempty"`
 	// Preview shows a brush that places a group of tiles (a stamp made from
 	// a selection) as the whole group; nil for one-tile brushes.
 	Preview *BrushPreview `json:"preview,omitempty"`
@@ -91,10 +94,16 @@ func (data *mapData) palette() Palette {
 	if eff == nil {
 		eff = data.materials
 	}
+	userBrushes := make(map[string]bool, len(data.materials.Brushes))
+	for _, b := range data.materials.Brushes {
+		userBrushes[strings.ToLower(b.Name)] = true
+	}
+
 	palette := Palette{DoorTypes: materials.DoorTypes, Creatures: data.allCreatures()}
 	brushByName := make(map[string]PaletteBrush, len(eff.Brushes))
 	for _, brush := range eff.Brushes {
-		if paletteBrush, ok := data.paletteBrush(brush); ok {
+		isBuiltin := !userBrushes[strings.ToLower(brush.Name)]
+		if paletteBrush, ok := data.paletteBrush(brush, isBuiltin); ok {
 			palette.Brushes = append(palette.Brushes, paletteBrush)
 			brushByName[strings.ToLower(brush.Name)] = paletteBrush
 		}
@@ -129,10 +138,7 @@ func (data *mapData) palette() Palette {
 	}
 
 	for _, tileset := range materials.AutoTilesets(data.items) {
-		name := tileset.Name
-		if usedNames[strings.ToLower(name)] {
-			name += " (Flags)"
-		}
+		name := uniqueTilesetName(tileset.Name, usedNames)
 		usedNames[strings.ToLower(name)] = true
 		palette.Tilesets = append(palette.Tilesets, PaletteTileset{
 			Name:  name,
@@ -142,6 +148,22 @@ func (data *mapData) palette() Palette {
 		})
 	}
 	return palette
+}
+
+func uniqueTilesetName(base string, used map[string]bool) string {
+	if !used[strings.ToLower(base)] {
+		return base
+	}
+	candidate := base + " (Flags)"
+	if !used[strings.ToLower(candidate)] {
+		return candidate
+	}
+	for n := 2; ; n++ {
+		candidate = fmt.Sprintf("%s (Flags %d)", base, n)
+		if !used[strings.ToLower(candidate)] {
+			return candidate
+		}
+	}
 }
 
 func (data *mapData) filterItems(ids []uint16) []uint16 {
@@ -170,7 +192,7 @@ func lookupPaletteBrushes(byName map[string]PaletteBrush, names []string) []Pale
 	return out
 }
 
-func (data *mapData) paletteBrush(brush *materials.Brush) (PaletteBrush, bool) {
+func (data *mapData) paletteBrush(brush *materials.Brush, builtin bool) (PaletteBrush, bool) {
 	if brush == nil {
 		return PaletteBrush{}, false
 	}
@@ -186,5 +208,5 @@ func (data *mapData) paletteBrush(brush *materials.Brush) (PaletteBrush, bool) {
 	if resolved := data.resolveBrushLook(brush, look); resolved != 0 {
 		look = resolved
 	}
-	return PaletteBrush{Name: brush.Name, Kind: kind, Look: look, Preview: brushPreview(brush)}, true
+	return PaletteBrush{Name: brush.Name, Kind: kind, Look: look, Builtin: builtin, Preview: brushPreview(brush)}, true
 }

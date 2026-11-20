@@ -215,7 +215,10 @@ func TestAutoTilesets(t *testing.T) {
 }
 
 func TestBuiltinMaterials(t *testing.T) {
-	otb := BuiltinMaterials(otitems.ModeOTB)
+	otb, err := BuiltinMaterials(otitems.ModeOTB)
+	if err != nil {
+		t.Fatalf("otb builtin error: %v", err)
+	}
 	if len(otb.Brushes) < 1500 || len(otb.Borders) < 150 || len(otb.Tilesets) < 40 {
 		t.Fatalf("otb builtin too small: brushes=%d borders=%d tilesets=%d", len(otb.Brushes), len(otb.Borders), len(otb.Tilesets))
 	}
@@ -226,7 +229,10 @@ func TestBuiltinMaterials(t *testing.T) {
 		t.Fatalf("otb stone wall = %+v", w)
 	}
 
-	client := BuiltinMaterials(otitems.ModeClient)
+	client, err := BuiltinMaterials(otitems.ModeClient)
+	if err != nil {
+		t.Fatalf("client builtin error: %v", err)
+	}
 	if len(client.Brushes) < 1800 || len(client.Borders) < 180 || len(client.Tilesets) < 80 {
 		t.Fatalf("client builtin too small: brushes=%d borders=%d tilesets=%d", len(client.Brushes), len(client.Borders), len(client.Tilesets))
 	}

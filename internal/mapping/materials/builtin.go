@@ -27,8 +27,10 @@ var (
 
 	builtinOTBOnce    sync.Once
 	builtinOTBMat     *Materials
+	builtinOTBErr     error
 	builtinClientOnce sync.Once
 	builtinClientMat  *Materials
+	builtinClientErr  error
 )
 
 func initBuiltinCreatures() {
@@ -48,37 +50,37 @@ func initBuiltinCreatures() {
 	})
 }
 
-func parseBuiltinGzip(data []byte) *Materials {
+func parseBuiltinGzip(data []byte) (*Materials, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
-		return New()
+		return New(), err
 	}
 	defer gz.Close()
 	raw, err := io.ReadAll(gz)
 	if err != nil {
-		return New()
+		return New(), err
 	}
 	m, err := Parse(raw)
 	if err != nil {
-		return New()
+		return New(), err
 	}
-	return m
+	return m, nil
 }
 
 // BuiltinMaterials returns the bundled read-only NexaMap brush, border, and
 // tileset catalog for the requested item ID mode (ModeOTB = ServerID,
 // ModeClient = ClientID). Callers must not mutate the returned *Materials.
-func BuiltinMaterials(mode otitems.Mode) *Materials {
+func BuiltinMaterials(mode otitems.Mode) (*Materials, error) {
 	if mode == otitems.ModeClient {
 		builtinClientOnce.Do(func() {
-			builtinClientMat = parseBuiltinGzip(builtinMaterialsClientGZ)
+			builtinClientMat, builtinClientErr = parseBuiltinGzip(builtinMaterialsClientGZ)
 		})
-		return builtinClientMat
+		return builtinClientMat, builtinClientErr
 	}
 	builtinOTBOnce.Do(func() {
-		builtinOTBMat = parseBuiltinGzip(builtinMaterialsOTBGZ)
+		builtinOTBMat, builtinOTBErr = parseBuiltinGzip(builtinMaterialsOTBGZ)
 	})
-	return builtinOTBMat
+	return builtinOTBMat, builtinOTBErr
 }
 
 // BuiltinCreatures returns the bundled default Tibia monster and NPC outfits

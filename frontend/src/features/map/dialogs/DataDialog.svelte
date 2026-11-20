@@ -206,8 +206,8 @@
 				/><button class="t-btn" onclick={() => file("materialsPath", "Brush file", "*.json")}>…</button>
 			</div>
 			<p class="t-label hint">
-				{(map.palette?.brushes?.length ?? data?.brushes ?? 0).toLocaleString()} active brushes (built-in NexaMap catalog
-				+ {data?.brushes ?? 0} custom), {map.palette?.tilesets?.length ?? data?.tilesets ?? 0} collections,
+				{(map.palette?.brushes?.length ?? data?.brushes ?? 0).toLocaleString()} active brushes ({data?.brushes ??
+					0} custom), {map.palette?.tilesets?.length ?? data?.tilesets ?? 0} collections,
 				{map.palette?.creatures?.length ?? data?.creatures ?? 0} creatures.
 			</p>
 			<div class="row wrap">

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -11,27 +12,40 @@ import (
 )
 
 func (ms *MapService) saveMaterials(data *mapData) error {
-	data.index()
-	for _, opened := range ms.maps {
-		if opened.editor.Items.Mode == data.items.Mode {
-			opened.editor.SetBrushes(data.brushes)
-		}
-	}
 	if data.materialsPath == "" {
 		return errors.New("no materials file")
 	}
 	if err := os.MkdirAll(filepath.Dir(data.materialsPath), fsutil.DirMode); err != nil {
 		return err
 	}
-	return data.materials.Save(data.materialsPath)
+	if err := data.materials.Save(data.materialsPath); err != nil {
+		return err
+	}
+	data.index()
+	for _, opened := range ms.maps {
+		if opened.editor.Items.Mode == data.items.Mode {
+			opened.editor.SetBrushes(data.brushes)
+		}
+	}
+	return nil
 }
 
 func (ms *MapService) editMaterials(fn func(materialSet *materials.Materials) error) error {
 	return ms.withData(func(data *mapData) error {
+		backup, _ := json.Marshal(data.materials)
 		if err := fn(data.materials); err != nil {
+			if restored, parseErr := materials.Parse(backup); parseErr == nil {
+				data.materials = restored
+			}
 			return err
 		}
-		return ms.saveMaterials(data)
+		if err := ms.saveMaterials(data); err != nil {
+			if restored, parseErr := materials.Parse(backup); parseErr == nil {
+				data.materials = restored
+			}
+			return err
+		}
+		return nil
 	})
 }
 
@@ -50,8 +64,12 @@ func (ms *MapService) ImportRME(dir string) (result MaterialsResult, err error) 
 		if err != nil {
 			return err
 		}
+		backup, _ := json.Marshal(data.materials)
 		data.materials.Merge(imported)
 		if err := ms.saveMaterials(data); err != nil {
+			if restored, parseErr := materials.Parse(backup); parseErr == nil {
+				data.materials = restored
+			}
 			return err
 		}
 		result = MaterialsResult{Data: data.info(), Warnings: warnings}
@@ -66,8 +84,12 @@ func (ms *MapService) ImportMaterials(path string) (result MaterialsResult, err 
 		if err != nil {
 			return err
 		}
+		backup, _ := json.Marshal(data.materials)
 		data.materials.Merge(imported)
 		if err := ms.saveMaterials(data); err != nil {
+			if restored, parseErr := materials.Parse(backup); parseErr == nil {
+				data.materials = restored
+			}
 			return err
 		}
 		result = MaterialsResult{Data: data.info()}
@@ -97,7 +119,11 @@ func (ms *MapService) Brush(name string) (brush *materials.Brush, err error) {
 
 func (ms *MapService) Borders() (borders []*materials.Border, err error) {
 	err = ms.withData(func(data *mapData) error {
-		borders = data.materials.Borders
+		if data.effective != nil {
+			borders = data.effective.Borders
+		} else {
+			borders = data.materials.Borders
+		}
 		return nil
 	})
 	return borders, err
@@ -119,7 +145,20 @@ func (ms *MapService) SaveBrush(oldName string, brush materials.Brush, tilesets 
 }
 
 func (ms *MapService) RemoveBrush(name string) error {
-	return ms.editMaterials(func(materialSet *materials.Materials) error { materialSet.RemoveBrush(name); return nil })
+	return ms.withData(func(data *mapData) error {
+		if data.materials.Brush(name) == nil && data.effective != nil && data.effective.Brush(name) != nil {
+			return errors.New("built-in brushes cannot be removed; edit them to customize")
+		}
+		backup, _ := json.Marshal(data.materials)
+		data.materials.RemoveBrush(name)
+		if err := ms.saveMaterials(data); err != nil {
+			if restored, parseErr := materials.Parse(backup); parseErr == nil {
+				data.materials = restored
+			}
+			return err
+		}
+		return nil
+	})
 }
 
 func (ms *MapService) SaveTileset(oldName string, tileset materials.Tileset) error {
@@ -151,9 +190,16 @@ func (ms *MapService) DoodadFromSelection(id int, name string, tilesets []string
 		if err != nil {
 			return err
 		}
+		backup, _ := json.Marshal(data.materials)
 		if err := data.materials.SaveBrush("", brush, tilesets); err != nil {
 			return err
 		}
-		return ms.saveMaterials(data)
+		if err := ms.saveMaterials(data); err != nil {
+			if restored, parseErr := materials.Parse(backup); parseErr == nil {
+				data.materials = restored
+			}
+			return err
+		}
+		return nil
 	})
 }

@@ -98,16 +98,18 @@
 				if (tab in layouts && (value === "list" || value === "grid")) layouts[tab as View] = value;
 			}
 		}
+		const view: View = VIEWS.some((tab) => tab.id === stored.view) ? stored.view! : "terrain";
 		const collectionsByView: Record<View, string> = { terrain: "", decor: "", items: "", creatures: "" };
 		if (stored.collectionsByView && typeof stored.collectionsByView === "object") {
 			for (const [tab, value] of Object.entries(stored.collectionsByView)) {
 				if (tab in collectionsByView && typeof value === "string") collectionsByView[tab as View] = value;
 			}
-		} else if (typeof stored.collection === "string") {
+		} else if (typeof stored.collection === "string" && stored.collection) {
+			collectionsByView[view] = stored.collection;
 			collectionsByView.items = stored.collection;
 		}
 		return {
-			view: VIEWS.some((view) => view.id === stored.view) ? stored.view! : "terrain",
+			view,
 			collectionsByView,
 			layouts,
 			zoom:
@@ -327,6 +329,10 @@
 	}
 
 	function brushMenu(event: MouseEvent, brush: PaletteBrush) {
+		if (brush.builtin) {
+			openContextMenu(event, [{ label: "Customize brush…", action: () => editBrush(brush) }]);
+			return;
+		}
 		openContextMenu(event, [
 			{ label: "Edit brush…", action: () => editBrush(brush) },
 			{ label: "Remove brush", action: () => removeBrush(brush) },
