@@ -102,22 +102,19 @@
 		if (!canFind) return;
 		busy = true;
 		try {
-			const serverIds = findMode === "item" ? ids.filter((id) => id > 0 && id <= 0xffff) : [];
-			const onlyHighIds = findMode === "item" && ids.length > 0 && serverIds.length === 0;
-			const found = onlyHighIds
-				? { results: [], more: false }
-				: await MapService.Find(map.activeId, {
-						ids: serverIds,
-						clientId: findMode === "client" ? parsedClientId.value : 0,
-						spriteId: findMode === "sprite" ? parsedSpriteId.value : 0,
-						name: findMode === "item" && !ids.length ? name.trim() : "",
-						kind,
-						actionId: Number(actionId) || 0,
-						uniqueId: Number(uniqueId) || 0,
-						inSelection,
-						containers,
-						limit: 5000,
-					});
+			const serverIds = findMode === "item" ? ids.filter((id) => id > 0 && id <= 0xffffffff) : [];
+			const found = await MapService.Find(map.activeId, {
+				ids: serverIds,
+				clientId: findMode === "client" ? parsedClientId.value : 0,
+				spriteId: findMode === "sprite" ? parsedSpriteId.value : 0,
+				name: findMode === "item" && !ids.length ? name.trim() : "",
+				kind,
+				actionId: Number(actionId) || 0,
+				uniqueId: Number(uniqueId) || 0,
+				inSelection,
+				containers,
+				limit: 5000,
+			});
 			const title =
 				findMode === "client"
 					? `Client ID ${parsedClientId.value}`

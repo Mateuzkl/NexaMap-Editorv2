@@ -54,8 +54,8 @@ type TerrainClass struct {
 
 // look is one way a tile was seen: ground, items and how often.
 type look struct {
-	Ground uint16   `json:"ground"`
-	Items  []uint16 `json:"items,omitempty"`
+	Ground uint32   `json:"ground"`
+	Items  []uint32 `json:"items,omitempty"`
 	Count  int      `json:"count"`
 }
 
@@ -67,7 +67,7 @@ type terrainRules struct {
 	// see signature) to the looks seen with it.
 	Looks map[string][]look `json:"looks"`
 	// byGround and nearest are built on load.
-	byGround map[uint16]int
+	byGround map[uint32]int
 	nearest  map[string]string
 }
 
@@ -77,17 +77,17 @@ func (rules *terrainRules) otherCode() int { return len(rules.Classes) }
 func (rules *terrainRules) noneCode() int  { return len(rules.Classes) + 1 }
 
 func (rules *terrainRules) index() {
-	rules.byGround = map[uint16]int{}
+	rules.byGround = map[uint32]int{}
 	for index, class := range rules.Classes {
 		for _, ground := range class.Grounds {
-			rules.byGround[uint16(ground)] = index
+			rules.byGround[uint32(ground)] = index
 		}
 	}
 	rules.nearest = map[string]string{}
 }
 
 // classOf returns the class code of a ground (0: no tile or ground).
-func (rules *terrainRules) classOf(ground uint16) int {
+func (rules *terrainRules) classOf(ground uint32) int {
 	if ground == 0 {
 		return rules.noneCode()
 	}
@@ -108,7 +108,7 @@ func signature(center int, neighbors [8]int) string {
 
 // learn adds the tiles of a sample to the rules. tiles must include a ring
 // of one tile around the sample area.
-func (rules *terrainRules) learn(tiles map[otmap.Position]mapedit.TileSpec, area image.Rectangle, floor int, ignore map[uint16]bool) int {
+func (rules *terrainRules) learn(tiles map[otmap.Position]mapedit.TileSpec, area image.Rectangle, floor int, ignore map[uint32]bool) int {
 	learned := 0
 	classAt := func(x, y int) int {
 		return rules.classOf(tiles[otmap.Position{X: uint16(x), Y: uint16(y), Z: uint8(floor)}].Ground)
@@ -125,7 +125,7 @@ func (rules *terrainRules) learn(tiles map[otmap.Position]mapedit.TileSpec, area
 				neighbors[i] = classAt(x+offset[0], y+offset[1])
 			}
 			key := signature(center, neighbors)
-			spec.Items = slices.DeleteFunc(slices.Clone(spec.Items), func(item uint16) bool { return ignore[item] })
+			spec.Items = slices.DeleteFunc(slices.Clone(spec.Items), func(item uint32) bool { return ignore[item] })
 			looks := rules.Looks[key]
 			found := slices.IndexFunc(looks, func(seen look) bool { return seen.Ground == spec.Ground && slices.Equal(seen.Items, spec.Items) })
 			if found < 0 {
@@ -330,19 +330,19 @@ func (s *Server) addTerrainRuleTools(server *mcp.Server) {
 			if err != nil {
 				return nil, err
 			}
-			counts := map[uint16]int{}
+			counts := map[uint32]int{}
 			for _, spec := range specs {
 				counts[spec.Ground]++
 			}
 			type groundCount struct {
-				ID    uint16 `json:"id"`
+				ID    uint32 `json:"id"`
 				Name  string `json:"name"`
 				Count int    `json:"count"`
 			}
 			out := []groundCount{}
 			for ground, count := range counts {
 				name := ""
-				if item, err := s.maps.Item(ground); err == nil {
+				if item, err := s.maps.Item32(ground); err == nil {
 					name = item.Name
 				}
 				out = append(out, groundCount{ID: ground, Name: name, Count: count})
@@ -366,9 +366,9 @@ func (s *Server) addTerrainRuleTools(server *mcp.Server) {
 			rules := &terrainRules{Name: args.Name, Classes: args.Classes, Looks: map[string][]look{}}
 			rules.index()
 			learned, total := 0, 0
-			ignore := map[uint16]bool{}
+			ignore := map[uint32]bool{}
 			for _, item := range args.Ignore {
-				ignore[uint16(item)] = true
+				ignore[uint32(item)] = true
 			}
 			for _, sample := range args.Samples {
 				area := image.Rect(sample.X, sample.Y, sample.X+sample.Width, sample.Y+sample.Height)
@@ -416,10 +416,10 @@ func (s *Server) addTerrainRuleTools(server *mcp.Server) {
 				if err != nil {
 					return nil, err
 				}
-				if tile.Ground < 0 || tile.Ground > 0xFFFF {
+				if tile.Ground < 0 || int64(tile.Ground) > 0xFFFFFFFF {
 					return nil, errors.New("bad ground id")
 				}
-				specs = append(specs, mapedit.TileSpec{Pos: pos, Ground: uint16(tile.Ground), Items: ids})
+				specs = append(specs, mapedit.TileSpec{Pos: pos, Ground: uint32(tile.Ground), Items: ids})
 			}
 			stroke := s.nextStroke()
 			return s.edit(args.MapID, func(id int) (app.MapChange, error) { return s.maps.SetTiles(id, specs, stroke) })

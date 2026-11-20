@@ -78,7 +78,7 @@ func (e *Editor) walkability(tile *otmap.Tile) walkability {
 		return notWalkable
 	}
 	door := false
-	unpassable := func(id uint16) bool {
+	unpassable := func(id uint32) bool {
 		itemType := e.itemType(id)
 		if itemType == nil || !itemType.Flags.Has(otitems.FlagUnpassable) {
 			return false
@@ -98,7 +98,7 @@ func (e *Editor) walkability(tile *otmap.Tile) walkability {
 	return walkable
 }
 
-func (e *Editor) isDoor(id uint16, itemType *otitems.Type) bool {
+func (e *Editor) isDoor(id uint32, itemType *otitems.Type) bool {
 	if itemType != nil && itemType.IsDoor() {
 		return true
 	}
@@ -184,7 +184,7 @@ func (e *Editor) transitions(pos otmap.Position, tile *otmap.Tile) []pathMove {
 
 // climbItem names a ladder or rope spot on a tile (used to go up).
 func (e *Editor) climbItem(tile *otmap.Tile) string {
-	check := func(id uint16) string {
+	check := func(id uint32) string {
 		itemType := e.itemType(id)
 		if itemType == nil {
 			return ""

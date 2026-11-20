@@ -206,7 +206,7 @@ func getSpawn(r *binio.Reader) *otmap.Spawn {
 }
 
 func putItem(w *binio.Writer, item otmap.Item) {
-	w.U16(item.ID)
+	w.U32(item.ID)
 	w.U16(item.Subtype)
 	ext := item.Ext
 	if !item.Complex() {
@@ -252,7 +252,7 @@ func putItem(w *binio.Writer, item otmap.Item) {
 const maxItemsAhead = 64
 
 func getItem(r *binio.Reader, depth int) otmap.Item {
-	item := otmap.Item{ID: r.U16(), Subtype: r.U16()}
+	item := otmap.Item{ID: r.U32(), Subtype: r.U16()}
 	if r.U8() == 0 {
 		return item
 	}
@@ -267,7 +267,7 @@ func getItem(r *binio.Reader, depth int) otmap.Item {
 	}
 	ext.DepotID = r.U16()
 	ext.DoorID = r.U8()
-	if count := getCount(r, 5); count > 0 {
+	if count := getCount(r, 7); count > 0 {
 		ext.Items = make([]otmap.Item, 0, min(count, maxItemsAhead))
 		for range count {
 			inner := getItem(r, depth+1)

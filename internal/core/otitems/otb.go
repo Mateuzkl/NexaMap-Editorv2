@@ -2,6 +2,7 @@ package otitems
 
 import (
 	"encoding/binary"
+	"math"
 
 	"github.com/nekiro/ots-creator/internal/formats/itemsotb"
 )
@@ -35,12 +36,22 @@ func typeFromOTB(item *itemsotb.Item) *Type {
 	serverID := item.ServerID32()
 	clientID := item.ClientID32()
 	rotateTo := item.RotateTo32()
+	var id16, clientID16, rot16 uint16
+	if serverID <= math.MaxUint16 {
+		id16 = uint16(serverID)
+	}
+	if clientID <= math.MaxUint16 {
+		clientID16 = uint16(clientID)
+	}
+	if rotateTo <= math.MaxUint16 {
+		rot16 = uint16(rotateTo)
+	}
 	itemType := &Type{
-		ID:           item.ServerID(),
-		ClientID:     item.ClientID(),
+		ID:           id16,
+		ClientID:     clientID16,
 		ID32:         serverID,
 		ClientID32:   clientID,
-		RotateTo:     uint16(rotateTo),
+		RotateTo:     rot16,
 		RotateTo32:   rotateTo,
 		Group:        group,
 		Flags:        flagsFromOTB(item.Flags, group),

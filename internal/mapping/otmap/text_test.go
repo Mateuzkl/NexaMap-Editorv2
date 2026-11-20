@@ -18,8 +18,8 @@ import (
 // normalizedTiles returns every tile in a comparable form: editor state
 // cleared, meta items dropped, raw and map attributes sorted.
 func normalizedTiles(gameMap *Map, items Items) map[Position]*Tile {
-	meta := func(id uint16) bool {
-		itemType := items.Get(id)
+	meta := func(id uint32) bool {
+		itemType := lookupItem(items, id)
 		return itemType != nil && itemType.Flags.Has(otitems.FlagMeta)
 	}
 	var normalizeItems func(list []Item) []Item

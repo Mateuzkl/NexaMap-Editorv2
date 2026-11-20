@@ -91,10 +91,10 @@ func (e *Editor) fitWalls(tx *Tx, pos otmap.Position) {
 
 type pieceChange struct {
 	index int
-	id    uint16
+	id    uint32
 }
 
-func appendPieceChange(changes []pieceChange, items []otmap.Item, index int, id uint16) []pieceChange {
+func appendPieceChange(changes []pieceChange, items []otmap.Item, index int, id uint32) []pieceChange {
 	if items[index].ID == id {
 		return changes
 	}
@@ -116,7 +116,7 @@ func applyPieceChanges(tx *Tx, pos otmap.Position, changes []pieceChange) {
 // fitWall returns the alignment and item of a wall for the neighbor mask,
 // trying the full shape set before the reduced one. The alignment is -1
 // when the brush has no fitting piece.
-func (e *Editor) fitWall(id uint16, wall *WallBrush, info *itemInfo, mask int) (newAlign int, newID uint16) {
+func (e *Editor) fitWall(id uint32, wall *WallBrush, info *itemInfo, mask int) (newAlign int, newID uint32) {
 	for _, full := range []bool{true, false} {
 		shape := wallShape(mask, full)
 		if info.wallAlign == shape {
@@ -124,12 +124,12 @@ func (e *Editor) fitWall(id uint16, wall *WallBrush, info *itemInfo, mask int) (
 		}
 		if info.door {
 			if doorID := wall.doorFor(shape, info.doorType, info.doorOpen); doorID != 0 {
-				return shape, doorID
+				return shape, uint32(doorID)
 			}
 			continue
 		}
 		if pickedID := wall.pick(shape, e.rng); pickedID != 0 {
-			return shape, pickedID
+			return shape, uint32(pickedID)
 		}
 	}
 	return -1, 0
@@ -141,10 +141,10 @@ func (e *Editor) fitDecoration(item otmap.Item, decoration *WallBrush, info *ite
 	if info.wallAlign != align {
 		if info.door {
 			if id := decoration.doorFor(align, info.doorType, info.doorOpen); id != 0 {
-				item.ID = id
+				item.ID = uint32(id)
 			}
 		} else if id := decoration.pick(align, e.rng); id != 0 {
-			item.ID = id
+			item.ID = uint32(id)
 		}
 	}
 	return item
@@ -192,7 +192,7 @@ func (e *Editor) drawWall(tile *otmap.Tile, wall *WallBrush) {
 	e.cleanWalls(tile, wall)
 	for align := 0; align < wallAlignmentMax; align++ {
 		if id := wall.pick(align, e.rng); id != 0 {
-			e.addItem(tile, otmap.Item{ID: id})
+			e.addItem(tile, otmap.Item{ID: uint32(id)})
 			return
 		}
 	}
@@ -207,7 +207,7 @@ func (e *Editor) cycleWall(tile *otmap.Tile, wall *WallBrush) bool {
 		for step := 1; step < wallAlignmentMax; step++ {
 			align := (info.wallAlign + step) % wallAlignmentMax
 			if id := wall.pick(align, e.rng); id != 0 {
-				tile.Items[i].ID = id
+				tile.Items[i].ID = uint32(id)
 				return true
 			}
 		}
@@ -232,7 +232,7 @@ func (e *Editor) drawDecoration(tile *otmap.Tile, decoration *WallBrush) {
 			id = decoration.nodes[info.wallAlign].items.pick(e.rng)
 		}
 		if id != 0 {
-			decorated = append(decorated, otmap.Item{ID: id})
+			decorated = append(decorated, otmap.Item{ID: uint32(id)})
 		}
 	}
 	tile.Items = decorated
@@ -257,7 +257,7 @@ func (e *Editor) drawDoor(tx *Tx, pos otmap.Position, doorType int, open bool) b
 			continue
 		}
 		tile := tx.Edit(pos)
-		tile.Items[i].ID = id
+		tile.Items[i].ID = uint32(id)
 		// Decorations above follow.
 		for j := i + 1; j < len(tile.Items); j++ {
 			decoration, decorationInfo := e.Brushes.wallOf(tile.Items[j].ID)
@@ -265,7 +265,7 @@ func (e *Editor) drawDoor(tx *Tx, pos otmap.Position, doorType int, open bool) b
 				break
 			}
 			if decorationID := decoration.doorFor(decorationInfo.wallAlign, doorType, state); decorationID != 0 {
-				tile.Items[j].ID = decorationID
+				tile.Items[j].ID = uint32(decorationID)
 			}
 		}
 		if e.Settings.AutoDoorID && tile.HouseID != 0 {
@@ -288,7 +288,7 @@ func (e *Editor) removeDoor(tx *Tx, pos otmap.Position) bool {
 		}
 		tile := tx.Edit(pos)
 		if id := wallBrush.pick(info.wallAlign, e.rng); id != 0 {
-			tile.Items[i].ID = id
+			tile.Items[i].ID = uint32(id)
 			if tile.Items[i].Ext != nil {
 				tile.Items[i].Ext.DoorID = 0
 				tile.Items[i].Compact()
@@ -306,7 +306,7 @@ func (e *Editor) switchDoor(tile *otmap.Tile, i int) bool {
 	}
 	for _, door := range wallBrush.nodes[info.wallAlign].doors {
 		if door.doorType == info.doorType && door.open != info.doorOpen {
-			tile.Items[i].ID = door.id
+			tile.Items[i].ID = uint32(door.id)
 			return true
 		}
 	}
@@ -376,7 +376,7 @@ func tablePiece(mask int) int {
 	return tableAlone
 }
 
-func tileHas(tile *otmap.Tile, fn func(id uint16) bool) bool {
+func tileHas(tile *otmap.Tile, fn func(id uint32) bool) bool {
 	if tile == nil {
 		return false
 	}
@@ -427,12 +427,12 @@ var tableKind = joinedKind{
 	fallback: tableAlone,
 }
 
-func (e *Editor) joinedBrushOf(kind *joinedKind, id uint16) (joinedBrush, int) {
+func (e *Editor) joinedBrushOf(kind *joinedKind, id uint32) (joinedBrush, int) {
 	return kind.brushOf(e.Brushes.info[id])
 }
 
 func (e *Editor) hasJoined(tile *otmap.Tile, kind *joinedKind) bool {
-	return tileHas(tile, func(id uint16) bool {
+	return tileHas(tile, func(id uint32) bool {
 		brush, _ := e.joinedBrushOf(kind, id)
 		return brush != nil
 	})
@@ -455,7 +455,7 @@ func (e *Editor) fitJoined(tx *Tx, pos otmap.Position, kind *joinedKind) {
 			continue
 		}
 		mask := e.neighborMask(x, y, z, neighborOffsets8[:], func(neighbor *otmap.Tile) bool {
-			return tileHas(neighbor, func(id uint16) bool {
+			return tileHas(neighbor, func(id uint32) bool {
 				neighborBrush, _ := e.joinedBrushOf(kind, id)
 				return neighborBrush == brush
 			})
@@ -466,9 +466,9 @@ func (e *Editor) fitJoined(tx *Tx, pos otmap.Position, kind *joinedKind) {
 		}
 		pieces := brush.pieces()
 		if id := pieces[piece].pick(e.rng); id != 0 {
-			changes = appendPieceChange(changes, current.Items, i, id)
+			changes = appendPieceChange(changes, current.Items, i, uint32(id))
 		} else if id := pieces[kind.fallback].pick(e.rng); id != 0 {
-			changes = appendPieceChange(changes, current.Items, i, id)
+			changes = appendPieceChange(changes, current.Items, i, uint32(id))
 		}
 	}
 	applyPieceChanges(tx, pos, changes)
@@ -488,7 +488,7 @@ func (e *Editor) drawJoined(tile *otmap.Tile, kind *joinedKind, brush joinedBrus
 		}
 	}
 	if id != 0 {
-		e.addItem(tile, otmap.Item{ID: id})
+		e.addItem(tile, otmap.Item{ID: uint32(id)})
 	}
 }
 

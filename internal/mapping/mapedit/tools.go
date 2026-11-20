@@ -14,7 +14,7 @@ import (
 
 type FindQuery struct {
 	// IDs are server ids to find (empty: use ClientID, SpriteID, Name or Kind).
-	IDs      []uint16 `json:"ids"`
+	IDs      []uint32 `json:"ids"`
 	ClientID uint32   `json:"clientId,omitempty"`
 	SpriteID uint32   `json:"spriteId,omitempty"`
 	Name     string   `json:"name"`
@@ -31,7 +31,7 @@ type FindQuery struct {
 
 type FindResult struct {
 	Pos  otmap.Position `json:"pos"`
-	ID   uint16         `json:"id"`
+	ID   uint32         `json:"id"`
 	Name string         `json:"name"`
 	// Detail is the matched attribute ("aid 1000").
 	Detail string `json:"detail"`
@@ -113,7 +113,7 @@ func (e *Editor) Find(query FindQuery) ([]FindResult, bool) {
 }
 
 func firstDuplicate(items []otmap.Item) (otmap.Item, bool) {
-	seen := map[uint16]bool{}
+	seen := map[uint32]bool{}
 	for _, item := range items {
 		if seen[item.ID] {
 			return item, true
@@ -223,11 +223,11 @@ func truncate(text string, maxLen int) string {
 	return text[:maxLen] + "…"
 }
 
-func (e *Editor) name(id uint16) string {
+func (e *Editor) name(id uint32) string {
 	if itemType := e.itemType(id); itemType != nil {
 		return itemType.DisplayName()
 	}
-	return "unknown item " + strconv.Itoa(int(id))
+	return "unknown item " + strconv.FormatUint(uint64(id), 10)
 }
 
 func (e *Editor) eachTile(inSelection bool, fn func(pos otmap.Position, tile *otmap.Tile)) {
@@ -290,7 +290,7 @@ func (e *Editor) rewriteItems(label string, inSelection bool, fn func(items []ot
 }
 
 // ReplaceItems replaces items with one id by another (to 0 removes them).
-func (e *Editor) ReplaceItems(pairs map[uint16]uint16, inSelection bool) int {
+func (e *Editor) ReplaceItems(pairs map[uint32]uint32, inSelection bool) int {
 	replaced := 0
 	label := "Replace items"
 	if len(pairs) == 1 {
@@ -365,7 +365,7 @@ func (e *Editor) RemoveDuplicates(inSelection bool) int {
 		if len(tile.Items) < 2 {
 			return
 		}
-		seen := make(map[uint16]bool, len(tile.Items))
+		seen := make(map[uint32]bool, len(tile.Items))
 		kept := make([]otmap.Item, 0, len(tile.Items))
 		tileRemoved := 0
 		for _, item := range tile.Items {
@@ -586,7 +586,7 @@ func (e *Editor) countItemStats(stats *Statistics, items []otmap.Item, nested bo
 
 // ItemPatch changes attributes of an item. Nil fields stay unchanged.
 type ItemPatch struct {
-	ID          *uint16         `json:"id,omitempty"`
+	ID          *uint32         `json:"id,omitempty"`
 	Subtype     *uint16         `json:"subtype,omitempty"`
 	ActionID    *uint16         `json:"actionId,omitempty"`
 	UniqueID    *uint16         `json:"uniqueId,omitempty"`
@@ -719,7 +719,7 @@ func (e *Editor) RemoveItem(ref ItemRef) error {
 	return nil
 }
 
-func (e *Editor) AddToContainer(ref ItemRef, id uint16) error {
+func (e *Editor) AddToContainer(ref ItemRef, id uint32) error {
 	if e.itemType(id) == nil {
 		return fmt.Errorf("unknown item %d", id)
 	}
@@ -747,7 +747,7 @@ func (e *Editor) AddToContainer(ref ItemRef, id uint16) error {
 var ErrStackLayer = errors.New("items of different stack layers (border, bottom, common, top) keep the client's order; only items of the same layer can be reordered")
 
 // stackLayer is the client's stack layer of an item, as the renderer uses it.
-func (e *Editor) stackLayer(id uint16) uint8 {
+func (e *Editor) stackLayer(id uint32) uint8 {
 	if itemType := e.itemType(id); itemType != nil {
 		return itemType.TopOrder
 	}
@@ -781,7 +781,7 @@ func (e *Editor) MoveItem(pos otmap.Position, from, to int) error {
 	return nil
 }
 
-func (e *Editor) AddItem(pos otmap.Position, id uint16) error {
+func (e *Editor) AddItem(pos otmap.Position, id uint32) error {
 	if e.itemType(id) == nil {
 		return fmt.Errorf("unknown item %d", id)
 	}
@@ -804,10 +804,14 @@ func (e *Editor) RotateItem(ref ItemRef) error {
 		return err
 	}
 	itemType := e.itemType(item.ID)
-	if itemType == nil || itemType.RotateTo == 0 {
+	rot := uint32(0)
+	if itemType != nil {
+		rot = itemType.EffectiveRotateTo()
+	}
+	if itemType == nil || rot == 0 {
 		return errors.New("the item cannot be rotated")
 	}
-	item.ID = itemType.RotateTo
+	item.ID = rot
 	return nil
 }
 

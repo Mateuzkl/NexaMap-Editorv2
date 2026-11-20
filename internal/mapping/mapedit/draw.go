@@ -26,7 +26,7 @@ func (r Rect) bounds() (x0, y0, x1, y1 int) {
 type DrawRequest struct {
 	Kind      string `json:"kind"`
 	Name      string `json:"name"`
-	Item      uint16 `json:"item"`
+	Item      uint32 `json:"item"`
 	House     uint32 `json:"house"`
 	Waypoint  string `json:"waypoint"`
 	Creature  string `json:"creature"`
@@ -414,7 +414,7 @@ func (e *Editor) drawGround(tx *Tx, req DrawRequest, area *posSet) error {
 		if e.Settings.Automagic {
 			e.cleanBorders(tile)
 		}
-		tile.Ground = e.newItem(brush.items.pick(e.rng))
+		tile.Ground = e.newItem(uint32(brush.items.pick(e.rng)))
 		painted.add(pos)
 	}
 	if e.Settings.Automagic {

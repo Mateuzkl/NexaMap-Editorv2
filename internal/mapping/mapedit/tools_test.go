@@ -13,7 +13,7 @@ import (
 	"github.com/nekiro/ots-creator/internal/mapping/otmap"
 )
 
-func toolsPut(e *Editor, pos otmap.Position, ground uint16, items ...otmap.Item) {
+func toolsPut(e *Editor, pos otmap.Position, ground uint32, items ...otmap.Item) {
 	e.Map.SetTile(pos, &otmap.Tile{Ground: otmap.Item{ID: ground}, Items: items})
 }
 
@@ -21,11 +21,11 @@ func toolsBag(contents ...otmap.Item) otmap.Item {
 	return otmap.Item{ID: bagID, Ext: &otmap.ItemExt{Items: contents}}
 }
 
-func toolsWithAction(id, actionID uint16) otmap.Item {
+func toolsWithAction(id uint32, actionID uint16) otmap.Item {
 	return otmap.Item{ID: id, Ext: &otmap.ItemExt{ActionID: actionID}}
 }
 
-func toolsWithUnique(id, uniqueID uint16) otmap.Item {
+func toolsWithUnique(id uint32, uniqueID uint16) otmap.Item {
 	return otmap.Item{ID: id, Ext: &otmap.ItemExt{UniqueID: uniqueID}}
 }
 
@@ -33,7 +33,7 @@ func toolsGroundAndItems(tile *otmap.Tile) []uint16 {
 	if tile == nil {
 		return nil
 	}
-	return append([]uint16{tile.Ground.ID}, itemIDs(tile)...)
+	return append([]uint16{uint16(tile.Ground.ID)}, itemIDs(tile)...)
 }
 
 func toolsSnapshot(e *Editor) []string {
@@ -50,7 +50,7 @@ func TestFindByIDsListsMatchingItemsInMapOrder(t *testing.T) {
 	toolsPut(e, at(2, 1), sandID, otmap.Item{ID: coinID})
 	toolsPut(e, at(3, 1), sandID, otmap.Item{ID: stoneID})
 
-	found, more := e.Find(FindQuery{IDs: []uint16{stoneID, treeID}})
+	found, more := e.Find(FindQuery{IDs: []uint32{stoneID, treeID}})
 	want := []FindResult{
 		{Pos: at(1, 1), ID: stoneID, Name: "item"},
 		{Pos: at(1, 1), ID: treeID, Name: "item"},
@@ -65,7 +65,7 @@ func TestFindByIDsMatchesGround(t *testing.T) {
 	e := testEditor(t)
 	toolsPut(e, at(1, 1), sandID, otmap.Item{ID: stoneID})
 
-	found, _ := e.Find(FindQuery{IDs: []uint16{sandID}})
+	found, _ := e.Find(FindQuery{IDs: []uint32{sandID}})
 	want := []FindResult{{Pos: at(1, 1), ID: sandID, Name: "item"}}
 	if !reflect.DeepEqual(found, want) {
 		t.Fatalf("Find(ids sand) = %+v, want the sand ground %+v", found, want)
@@ -97,7 +97,7 @@ func TestFindResultNamesUnknownItem(t *testing.T) {
 	e := testEditor(t)
 	toolsPut(e, at(1, 1), 0, otmap.Item{ID: 9999})
 
-	found, _ := e.Find(FindQuery{IDs: []uint16{9999}})
+	found, _ := e.Find(FindQuery{IDs: []uint32{9999}})
 	if len(found) != 1 || found[0].Name != "unknown item 9999" {
 		t.Fatalf("Find(ids 9999) = %+v, want one result named %q", found, "unknown item 9999")
 	}
@@ -231,7 +231,7 @@ func TestFindCombinesIDsWithActionID(t *testing.T) {
 	e := testEditor(t)
 	toolsPut(e, at(1, 1), sandID, toolsWithAction(stoneID, 100), toolsWithAction(coinID, 100))
 
-	found, _ := e.Find(FindQuery{IDs: []uint16{coinID}, ActionID: 100})
+	found, _ := e.Find(FindQuery{IDs: []uint32{coinID}, ActionID: 100})
 	want := []FindResult{{Pos: at(1, 1), ID: coinID, Name: "item", Detail: "aid 100"}}
 	if !reflect.DeepEqual(found, want) {
 		t.Fatalf("Find(ids coin, aid 100) = %+v, want only the coin", found)
@@ -242,7 +242,7 @@ func TestFindSearchesContainerContentsOnlyWithContainers(t *testing.T) {
 	e := testEditor(t)
 	toolsPut(e, at(5, 5), sandID, toolsBag(toolsWithAction(coinID, 1234)))
 
-	if found, _ := e.Find(FindQuery{IDs: []uint16{coinID}}); len(found) != 0 {
+	if found, _ := e.Find(FindQuery{IDs: []uint32{coinID}}); len(found) != 0 {
 		t.Fatalf("Find(ids coin) = %+v, want nothing: the coin is inside a bag and Containers is off", found)
 	}
 	found, _ := e.Find(FindQuery{Kind: "action", Containers: true})
@@ -256,7 +256,7 @@ func TestFindSearchesNestedContainers(t *testing.T) {
 	e := testEditor(t)
 	toolsPut(e, at(5, 5), sandID, toolsBag(toolsBag(otmap.Item{ID: coinID})))
 
-	found, _ := e.Find(FindQuery{IDs: []uint16{coinID}, Containers: true})
+	found, _ := e.Find(FindQuery{IDs: []uint32{coinID}, Containers: true})
 	if len(found) != 1 || found[0].ID != coinID {
 		t.Fatalf("Find(ids coin, containers) = %+v, want the coin two bags deep", found)
 	}
@@ -267,7 +267,7 @@ func TestFindLimitStopsAndReportsMore(t *testing.T) {
 	toolsPut(e, at(1, 1), sandID, otmap.Item{ID: stoneID}, otmap.Item{ID: stoneID})
 	toolsPut(e, at(2, 1), sandID, otmap.Item{ID: stoneID})
 
-	found, more := e.Find(FindQuery{IDs: []uint16{stoneID}, Limit: 2})
+	found, more := e.Find(FindQuery{IDs: []uint32{stoneID}, Limit: 2})
 	if len(found) != 2 || !more {
 		t.Fatalf("Find(limit 2) = %d results more=%v, want 2 results and more=true (3 stones exist)", len(found), more)
 	}
@@ -280,7 +280,7 @@ func TestFindLimitStopsInsideContainers(t *testing.T) {
 	e := testEditor(t)
 	toolsPut(e, at(1, 1), sandID, toolsBag(otmap.Item{ID: coinID}, otmap.Item{ID: coinID}), otmap.Item{ID: coinID})
 
-	found, more := e.Find(FindQuery{IDs: []uint16{coinID}, Containers: true, Limit: 1})
+	found, more := e.Find(FindQuery{IDs: []uint32{coinID}, Containers: true, Limit: 1})
 	if len(found) != 1 || !more {
 		t.Fatalf("Find(limit 1, containers) = %+v more=%v, want 1 result and more=true", found, more)
 	}
@@ -292,7 +292,7 @@ func TestFindWithoutLimitReturnsAll(t *testing.T) {
 		toolsPut(e, at(x, 1), sandID, otmap.Item{ID: stoneID})
 	}
 
-	found, more := e.Find(FindQuery{IDs: []uint16{stoneID}})
+	found, more := e.Find(FindQuery{IDs: []uint32{stoneID}})
 	if len(found) != 3 || more {
 		t.Fatalf("Find(no limit) = %d results more=%v, want all 3 stones and more=false", len(found), more)
 	}
@@ -304,7 +304,7 @@ func TestFindInSelectionSearchesOnlySelectedTiles(t *testing.T) {
 	toolsPut(e, at(2, 1), sandID, otmap.Item{ID: stoneID})
 	e.SelectTiles([]otmap.Position{at(2, 1)}, false)
 
-	found, _ := e.Find(FindQuery{IDs: []uint16{stoneID}, InSelection: true})
+	found, _ := e.Find(FindQuery{IDs: []uint32{stoneID}, InSelection: true})
 	want := []FindResult{{Pos: at(2, 1), ID: stoneID, Name: "item"}}
 	if !reflect.DeepEqual(found, want) {
 		t.Fatalf("Find(in selection) = %+v, want only the selected stone", found)
@@ -320,7 +320,7 @@ func TestFindInSelectionSkipsSelectedPositionWithoutTile(t *testing.T) {
 	// lists its position.
 	e.Map.SetTile(at(1, 1), nil)
 
-	found, _ := e.Find(FindQuery{IDs: []uint16{stoneID}, InSelection: true})
+	found, _ := e.Find(FindQuery{IDs: []uint32{stoneID}, InSelection: true})
 	want := []FindResult{{Pos: at(2, 1), ID: stoneID, Name: "item"}}
 	if !reflect.DeepEqual(found, want) {
 		t.Fatalf("Find(in selection) = %+v, want only the stone of the remaining tile", found)
@@ -331,7 +331,7 @@ func TestReplaceItemsReplacesOnTilesAndInContainersKeepingAttributes(t *testing.
 	e := testEditor(t)
 	toolsPut(e, at(5, 5), sandID, toolsBag(toolsWithAction(coinID, 1234)), otmap.Item{ID: coinID, Subtype: 7})
 
-	if replaced := e.ReplaceItems(map[uint16]uint16{coinID: stoneID}, false); replaced != 2 {
+	if replaced := e.ReplaceItems(map[uint32]uint32{coinID: stoneID}, false); replaced != 2 {
 		t.Fatalf("ReplaceItems replaced %d, want 2 (the loose coin and the coin in the bag)", replaced)
 	}
 	tile := e.Map.Tile(at(5, 5))
@@ -347,7 +347,7 @@ func TestReplaceItemsReplacesGround(t *testing.T) {
 	e := testEditor(t)
 	toolsPut(e, at(5, 5), sandID)
 
-	if replaced := e.ReplaceItems(map[uint16]uint16{sandID: grassA}, false); replaced != 1 {
+	if replaced := e.ReplaceItems(map[uint32]uint32{sandID: grassA}, false); replaced != 1 {
 		t.Fatalf("ReplaceItems replaced %d, want 1", replaced)
 	}
 	if got := e.Map.Tile(at(5, 5)).Ground.ID; got != grassA {
@@ -359,7 +359,7 @@ func TestReplaceItemsToZeroRemovesThem(t *testing.T) {
 	e := testEditor(t)
 	toolsPut(e, at(5, 5), sandID, otmap.Item{ID: stoneID}, otmap.Item{ID: coinID})
 
-	if removed := e.ReplaceItems(map[uint16]uint16{stoneID: 0}, false); removed != 1 {
+	if removed := e.ReplaceItems(map[uint32]uint32{stoneID: 0}, false); removed != 1 {
 		t.Fatalf("ReplaceItems removed %d, want 1", removed)
 	}
 	if got := toolsGroundAndItems(e.Map.Tile(at(5, 5))); !slices.Equal(got, []uint16{sandID, coinID}) {
@@ -374,7 +374,7 @@ func TestReplaceItemsToZeroRemovesThemFromContainers(t *testing.T) {
 	e := testEditor(t)
 	toolsPut(e, at(5, 5), sandID, toolsBag(otmap.Item{ID: stoneID}, otmap.Item{ID: coinID}))
 
-	if removed := e.ReplaceItems(map[uint16]uint16{stoneID: 0}, false); removed != 1 {
+	if removed := e.ReplaceItems(map[uint32]uint32{stoneID: 0}, false); removed != 1 {
 		t.Fatalf("ReplaceItems removed %d, want 1", removed)
 	}
 	if contents := e.Map.Tile(at(5, 5)).Items[0].Ext.Items; !reflect.DeepEqual(contents, []otmap.Item{{ID: coinID}}) {
@@ -386,7 +386,7 @@ func TestReplaceItemsLabelsReplacement(t *testing.T) {
 	e := testEditor(t)
 	toolsPut(e, at(5, 5), sandID, otmap.Item{ID: stoneID})
 
-	e.ReplaceItems(map[uint16]uint16{stoneID: coinID}, false)
+	e.ReplaceItems(map[uint32]uint32{stoneID: coinID}, false)
 	if undo, _ := e.History(); len(undo) != 1 || undo[0].Label != "Replace items" {
 		t.Fatalf("history = %+v, want one %q step", undo, "Replace items")
 	}
@@ -398,7 +398,7 @@ func TestReplaceItemsInSelectionOnly(t *testing.T) {
 	toolsPut(e, at(2, 1), sandID, otmap.Item{ID: stoneID})
 	e.SelectTiles([]otmap.Position{at(2, 1), at(3, 1)}, false)
 
-	if replaced := e.ReplaceItems(map[uint16]uint16{stoneID: coinID}, true); replaced != 1 {
+	if replaced := e.ReplaceItems(map[uint32]uint32{stoneID: coinID}, true); replaced != 1 {
 		t.Fatalf("ReplaceItems(in selection) replaced %d, want 1", replaced)
 	}
 	if got := itemIDs(e.Map.Tile(at(1, 1))); !slices.Equal(got, []uint16{stoneID}) {
@@ -413,7 +413,7 @@ func TestReplaceItemsWithoutMatchesChangesNothing(t *testing.T) {
 	e := testEditor(t)
 	toolsPut(e, at(1, 1), sandID, toolsBag(otmap.Item{ID: stoneID}))
 
-	if replaced := e.ReplaceItems(map[uint16]uint16{treeID: coinID}, false); replaced != 0 {
+	if replaced := e.ReplaceItems(map[uint32]uint32{treeID: coinID}, false); replaced != 0 {
 		t.Fatalf("ReplaceItems replaced %d, want 0", replaced)
 	}
 	if e.CanUndo() {
@@ -425,7 +425,7 @@ func TestReplaceItemsIsUndoable(t *testing.T) {
 	e := testEditor(t)
 	toolsPut(e, at(1, 1), sandID, toolsBag(otmap.Item{ID: stoneID}))
 
-	e.ReplaceItems(map[uint16]uint16{stoneID: coinID}, false)
+	e.ReplaceItems(map[uint32]uint32{stoneID: coinID}, false)
 	e.Undo()
 	if got := e.Map.Tile(at(1, 1)).Items[0].Ext.Items[0].ID; got != stoneID {
 		t.Fatalf("after undo the bag holds %d, want the stone back", got)
@@ -764,7 +764,7 @@ func TestUpdateItemAppliesEachPatchField(t *testing.T) {
 		patch ItemPatch
 		want  otmap.Item
 	}{
-		{"id", inspectorCoinRef, ItemPatch{ID: ptr[uint16](stoneID)}, otmap.Item{ID: stoneID, Subtype: 1}},
+		{"id", inspectorCoinRef, ItemPatch{ID: ptr[uint32](stoneID)}, otmap.Item{ID: stoneID, Subtype: 1}},
 		{"subtype", inspectorCoinRef, ItemPatch{Subtype: ptr[uint16](50)}, otmap.Item{ID: coinID, Subtype: 50}},
 		{"action id", inspectorCoinRef, ItemPatch{ActionID: ptr[uint16](1000)}, otmap.Item{ID: coinID, Subtype: 1, Ext: &otmap.ItemExt{ActionID: 1000}}},
 		{"unique id", inspectorCoinRef, ItemPatch{UniqueID: ptr[uint16](2000)}, otmap.Item{ID: coinID, Subtype: 1, Ext: &otmap.ItemExt{UniqueID: 2000}}},
@@ -829,7 +829,7 @@ func TestUpdateItemErrors(t *testing.T) {
 		{"path past the contents", ItemRef{Pos: at(5, 5), Index: 0, Path: []int{1}}, ItemPatch{}, ErrNoItem.Error()},
 		{"negative path index", ItemRef{Pos: at(5, 5), Index: 0, Path: []int{-1}}, ItemPatch{}, ErrNoItem.Error()},
 		{"path into an item without contents", ItemRef{Pos: at(5, 5), Index: 0, Path: []int{0, 0}}, ItemPatch{}, ErrNoItem.Error()},
-		{"unknown new id", inspectorCoinRef, ItemPatch{ID: ptr[uint16](9999), ActionID: ptr[uint16](1)}, "unknown item 9999"},
+		{"unknown new id", inspectorCoinRef, ItemPatch{ID: ptr[uint32](9999), ActionID: ptr[uint16](1)}, "unknown item 9999"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -951,7 +951,7 @@ func TestAddToContainerErrors(t *testing.T) {
 	cases := []struct {
 		name string
 		ref  ItemRef
-		id   uint16
+		id   uint32
 		want any
 	}{
 		{"unknown item", ItemRef{Pos: at(5, 5), Index: 0}, 9999, "unknown item 9999"},

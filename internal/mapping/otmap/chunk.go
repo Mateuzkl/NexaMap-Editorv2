@@ -1,6 +1,9 @@
 package otmap
 
-import "slices"
+import (
+	"math"
+	"slices"
+)
 
 // Chunk storage. Most tiles of a loaded map are plain: items without
 // attributes, no flags, house, creatures or selection. A chunk keeps those
@@ -51,11 +54,11 @@ func packable(tile *Tile) bool {
 	if tile.Flags != 0 || tile.HouseID != 0 || tile.State != 0 || tile.Ext != nil || len(tile.Items) > maxPackedItems {
 		return false
 	}
-	if ground := tile.Ground; ground.Ext != nil || ground.Selected {
+	if ground := tile.Ground; ground.Ext != nil || ground.Selected || ground.ID > math.MaxUint16 {
 		return false
 	}
 	for i := range tile.Items {
-		if item := &tile.Items[i]; item.Ext != nil || item.Selected {
+		if item := &tile.Items[i]; item.Ext != nil || item.Selected || item.ID > math.MaxUint16 {
 			return false
 		}
 	}
@@ -82,7 +85,7 @@ func (c *Chunk) unpack(stored packedTile, tile *Tile, buf []Item) *Tile {
 	packedItems := c.items[stored.offset : stored.offset+uint32(stored.count)]
 	*tile = Tile{}
 	if stored.ground {
-		tile.Ground = Item{ID: packedItems[0].id, Subtype: packedItems[0].subtype}
+		tile.Ground = Item{ID: uint32(packedItems[0].id), Subtype: packedItems[0].subtype}
 		packedItems = packedItems[1:]
 	}
 	if len(packedItems) > 0 {
@@ -93,7 +96,7 @@ func (c *Chunk) unpack(stored packedTile, tile *Tile, buf []Item) *Tile {
 			items = make([]Item, len(packedItems))
 		}
 		for i, item := range packedItems {
-			items[i] = Item{ID: item.id, Subtype: item.subtype}
+			items[i] = Item{ID: uint32(item.id), Subtype: item.subtype}
 		}
 		tile.Items = items
 	}
@@ -144,10 +147,10 @@ func (c *Chunk) addPacked(tile *Tile) uint16 {
 	stored := packedTile{offset: uint32(len(c.items))}
 	if tile.Ground.ID != 0 {
 		stored.ground = true
-		c.items = append(c.items, packedItem{tile.Ground.ID, tile.Ground.Subtype})
+		c.items = append(c.items, packedItem{uint16(tile.Ground.ID), tile.Ground.Subtype})
 	}
 	for _, item := range tile.Items {
-		c.items = append(c.items, packedItem{item.ID, item.Subtype})
+		c.items = append(c.items, packedItem{uint16(item.ID), item.Subtype})
 	}
 	stored.count = uint8(len(c.items) - int(stored.offset))
 	c.packed = append(c.packed, stored)

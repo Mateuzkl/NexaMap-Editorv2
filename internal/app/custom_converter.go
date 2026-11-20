@@ -295,11 +295,15 @@ func convertMapFile(srcPath, dstPath, name string, otbDB *otitems.DB, mapping ma
 	rewrite = func(item *otmap.Item) {
 		if item.ID != 0 {
 			mr.TotalItems++
-			if cid, ok := mapping[item.ID]; ok && cid != 0 {
-				mr.MappedItems++
-				if cid != item.ID {
-					mr.ChangedItems++
-					item.ID = cid
+			if item.ID <= 0xFFFF {
+				if cid, ok := mapping[uint16(item.ID)]; ok && cid != 0 {
+					mr.MappedItems++
+					if uint32(cid) != item.ID {
+						mr.ChangedItems++
+						item.ID = uint32(cid)
+					}
+				} else {
+					mr.MissingItems++
 				}
 			} else {
 				mr.MissingItems++

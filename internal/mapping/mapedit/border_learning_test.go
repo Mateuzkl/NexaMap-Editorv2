@@ -143,14 +143,14 @@ func TestLearnBordersFromMapAndBatchXML(t *testing.T) {
 	// 3x3 island mixing TWO unconfigured ground IDs (700 & 701) sharing the same borders!
 	for y := uint16(12); y <= 14; y++ {
 		for x := uint16(12); x <= 14; x++ {
-			gid := uint16(700)
+			gid := uint32(700)
 			if (x+y)%2 == 1 {
 				gid = 701
 			}
 			m.SetTile(otmap.Position{X: x, Y: y, Z: 7}, &otmap.Tile{Ground: otmap.Item{ID: gid}})
 		}
 	}
-	add := func(x, y, id uint16) {
+	add := func(x, y uint16, id uint32) {
 		pos := otmap.Position{X: x, Y: y, Z: 7}
 		tile := m.Tile(pos)
 		tile.Items = append(tile.Items, otmap.Item{ID: id})

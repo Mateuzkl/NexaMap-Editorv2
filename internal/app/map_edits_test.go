@@ -167,14 +167,14 @@ func TestMapServiceTools(t *testing.T) {
 	if _, err := ms.Tool(id, "fly", false); err == nil {
 		t.Fatal("unknown tool ran")
 	}
-	found, err := ms.Find(id, mapedit.FindQuery{IDs: []uint16{101}})
+	found, err := ms.Find(id, mapedit.FindQuery{IDs: []uint32{101}})
 	if err != nil || len(found.Results) != 3 {
 		t.Fatalf("find = %+v, %v", found, err)
 	}
-	if _, err := ms.Replace(id, []uint16{101}, nil, false); err == nil {
+	if _, err := ms.Replace(id, []uint32{101}, nil, false); err == nil {
 		t.Fatal("replace without pairs ran")
 	}
-	if replaced := mustChange(t)(ms.Replace(id, []uint16{101}, []uint16{0}, false)); replaced.Count != 3 {
+	if replaced := mustChange(t)(ms.Replace(id, []uint32{101}, []uint32{0}, false)); replaced.Count != 3 {
 		t.Fatalf("replaced %d", replaced.Count)
 	}
 	if stats, err := ms.Stats(id); err != nil || stats.Tiles != 3 {

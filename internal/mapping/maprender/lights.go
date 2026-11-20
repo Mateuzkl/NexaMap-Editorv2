@@ -137,11 +137,11 @@ func (b *geometryBuilder) hasTopGround(tile *otmap.Tile) bool {
 }
 
 func (b *geometryBuilder) itemLook(item otmap.Item) *thingLook {
-	itemType := b.scene.Items.Get(item.ID)
+	itemType := b.scene.Items.Get32(item.ID)
 	if itemType == nil || itemType.Flags.Has(otitems.FlagMeta) {
 		return nil
 	}
-	return b.lookOf(thing.CategoryItem, uint32(itemType.ClientID))
+	return b.lookOf(thing.CategoryItem, itemType.EffectiveClientID())
 }
 
 // isTopSized: two tiles a side (client: Size::dimension() == 4).

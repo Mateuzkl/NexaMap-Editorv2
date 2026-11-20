@@ -6,8 +6,8 @@ import "github.com/nekiro/ots-creator/internal/mapping/otmap"
 // bottom to top.
 type TileSpec struct {
 	Pos    otmap.Position `json:"pos"`
-	Ground uint16         `json:"ground"`
-	Items  []uint16       `json:"items"`
+	Ground uint32         `json:"ground"`
+	Items  []uint32       `json:"items"`
 }
 
 // SetTiles replaces the ground and items of tiles, keeping the items in the

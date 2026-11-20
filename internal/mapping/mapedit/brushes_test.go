@@ -197,7 +197,7 @@ func TestNewBrushesMarksMetaItems(t *testing.T) {
 func TestBrushesGroundOfReturnsGroundBrushOfItem(t *testing.T) {
 	brushes := testEditor(t).Brushes
 	for _, testCase := range []struct {
-		id   uint16
+		id   uint32
 		want string
 	}{{grassA, "grass"}, {grassB, "grass"}, {sandID, "sand"}, {borderN, ""}, {bagID, ""}, {9999, ""}} {
 		got := ""
@@ -217,7 +217,7 @@ func TestBrushOfReturnsOwningBrushAndKind(t *testing.T) {
 		}},
 	))
 	for _, testCase := range []struct {
-		id         uint16
+		id         uint32
 		name, kind string
 	}{
 		{grassA, "grass", materials.TypeGround},
@@ -312,7 +312,7 @@ func TestCarpetAndTableRegisterTheirPieces(t *testing.T) {
 func TestDoodadBrushOwnsItemsOfAllAlternatives(t *testing.T) {
 	e := testEditor(t)
 	pit := e.Brushes.Doodad("pit")
-	for _, id := range []uint16{sandID, stoneID, borderN, treeID} {
+	for _, id := range []uint32{sandID, stoneID, borderN, treeID} {
 		if !pit.owns(id) {
 			t.Errorf("pit does not own %d, an item of its composite", id)
 		}
@@ -353,7 +353,7 @@ func TestIsBorder(t *testing.T) {
 		materialsDB.Borders = append(materialsDB.Borders, &materials.Border{ID: 2, Edges: map[string]uint16{"n": 770}})
 	})
 	for _, testCase := range []struct {
-		id   uint16
+		id   uint32
 		want bool
 	}{
 		{borderN, true},       // material border

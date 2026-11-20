@@ -84,7 +84,7 @@ func (w *chunkWriter) shortString(text string) {
 //	u32 key, u16 tile count, then per tile:
 //	u16 local index (y*32+x), u16 flags, [u32 house id],
 //	u8 item count (ground first when the tile has one; flag bit 0x4000 of
-//	   the tile marks a ground), items: u16 id, u16 subtype, u8 flags,
+//	   the tile marks a ground), items: u32 id, u16 subtype, u8 flags,
 //	[creatures: u8 count, per creature: u8 flags (1 npc, 2 selected,
 //	   dir<<2), u16 look type, u8 head, body, legs, feet, addons,
 //	   u16 mount, u16 look item, u8 name length, name],
@@ -197,7 +197,7 @@ func (w *chunkWriter) items(tile *otmap.Tile) {
 }
 
 func (w *chunkWriter) item(item otmap.Item) {
-	w.u16(item.ID)
+	w.u32(item.ID)
 	w.u16(item.Subtype)
 	var flags uint8
 	if item.Selected {

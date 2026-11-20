@@ -68,9 +68,7 @@ func flagNames(flags otitems.Flags) []string {
 func (data *mapData) itemSummary(itemType *otitems.Type) ItemSummary {
 	id := itemType.EffectiveID()
 	summary := ItemSummary{ID: id, ClientID: itemType.EffectiveClientID(), Name: itemType.DisplayName(), Kind: itemType.KindName(), Flags: flagNames(itemType.Flags)}
-	if id <= 0xFFFF {
-		summary.Brush, summary.BrushKind = data.brushes.BrushOf(uint16(id))
-	}
+	summary.Brush, summary.BrushKind = data.brushes.BrushOf(id)
 	return summary
 }
 
@@ -253,15 +251,15 @@ func (data *mapData) terrainCell(tile *otmap.Tile) TerrainCell {
 	if tile.Ground.ID != 0 {
 		name, kind := data.brushes.BrushOf(tile.Ground.ID)
 		if kind != materials.TypeGround {
-			name = "item " + itemIDText(tile.Ground.ID)
-			if itemType := data.items.Get(tile.Ground.ID); itemType != nil && itemType.Name != "" {
+			name = "item " + itemIDText32(tile.Ground.ID)
+			if itemType := data.items.Get32(tile.Ground.ID); itemType != nil && itemType.Name != "" {
 				name += " " + itemType.Name
 			}
 		}
 		cell.Ground = name
 	}
 	for _, item := range tile.Items {
-		if itemType := data.items.Get(item.ID); itemType != nil && !itemType.IsBorder() && itemType.Flags.Has(otitems.FlagUnpassable) {
+		if itemType := data.items.Get32(item.ID); itemType != nil && !itemType.IsBorder() && itemType.Flags.Has(otitems.FlagUnpassable) {
 			cell.Blocking = true
 		}
 	}
@@ -308,7 +306,7 @@ func (ms *MapService) AreaContents(id int, area image.Rectangle, floor int) ([]m
 			if tile == nil {
 				continue
 			}
-			spec := mapedit.TileSpec{Pos: pos, Ground: tile.Ground.ID, Items: make([]uint16, len(tile.Items))}
+			spec := mapedit.TileSpec{Pos: pos, Ground: tile.Ground.ID, Items: make([]uint32, len(tile.Items))}
 			for i, item := range tile.Items {
 				spec.Items[i] = item.ID
 			}

@@ -9,7 +9,7 @@ import (
 )
 
 type TileItem struct {
-	ID        uint16         `json:"id"`
+	ID        uint32         `json:"id"`
 	ClientID  uint32         `json:"clientId"`
 	Name      string         `json:"name"`
 	Subtype   uint16         `json:"subtype"`
@@ -52,7 +52,7 @@ const kindInvalid = "invalid"
 
 func (data *mapData) tileItem(item otmap.Item) TileItem {
 	tileItem := TileItem{ID: item.ID, Subtype: item.Subtype, Selected: item.Selected, Ext: item.Ext}
-	if itemType := data.items.Get(item.ID); itemType != nil {
+	if itemType := data.items.Get32(item.ID); itemType != nil {
 		tileItem.ClientID, tileItem.Name, tileItem.Flags = itemType.EffectiveClientID(), itemType.DisplayName(), itemType.Flags
 		tileItem.TopOrder, tileItem.RotateTo, tileItem.Kind = itemType.TopOrder, itemType.EffectiveRotateTo(), itemType.KindName()
 	} else {

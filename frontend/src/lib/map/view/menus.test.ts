@@ -58,7 +58,7 @@ describe("mapContextMenu", () => {
 		const tileData: TileData = {
 			flags: TileFlags.ground,
 			house: 0,
-			ids: new Uint16Array([103, 4500]),
+			ids: new Uint32Array([103, 4500]),
 			subs: new Uint16Array([0, 0]),
 			itemFlags: new Uint8Array([0, 0]),
 			creatures: null,

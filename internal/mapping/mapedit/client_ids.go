@@ -19,19 +19,23 @@ func (e *Editor) ConvertToClientIDs(items *otitems.DB, brushes *Brushes) (int, e
 	if items == nil || items.Mode != otitems.ModeClient {
 		return 0, fmt.Errorf("client item data is required")
 	}
-	pairs := map[uint16]uint16{}
+	pairs := map[uint32]uint32{}
 	count := 0
 	var validate func(otmap.Item) error
 	validate = func(item otmap.Item) error {
 		if item.ID != 0 {
-			typeInfo := e.Items.Get(item.ID)
-			if typeInfo == nil || typeInfo.ClientID == 0 {
+			typeInfo := e.Items.Get32(item.ID)
+			cid := uint32(0)
+			if typeInfo != nil {
+				cid = typeInfo.EffectiveClientID()
+			}
+			if typeInfo == nil || cid == 0 {
 				return fmt.Errorf("server item %d has no client ID in the loaded items.otb", item.ID)
 			}
-			if items.Get(typeInfo.ClientID) == nil {
-				return fmt.Errorf("client item %d (server item %d) is missing from the open client", typeInfo.ClientID, item.ID)
+			if items.Get32(cid) == nil {
+				return fmt.Errorf("client item %d (server item %d) is missing from the open client", cid, item.ID)
 			}
-			pairs[item.ID] = typeInfo.ClientID
+			pairs[item.ID] = cid
 			count++
 		}
 		if item.Ext != nil {

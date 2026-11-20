@@ -484,12 +484,12 @@ func TestSetBrushesReplacesBrushesAndDropsDoodadPreview(t *testing.T) {
 }
 
 func TestSeedMakesRandomChoicesRepeatable(t *testing.T) {
-	paintGrass := func(seed uint64) []uint16 {
+	paintGrass := func(seed uint64) []uint32 {
 		e := testEditor(t)
 		e.Seed(seed)
 		e.Settings.Automagic = false
 		e.Draw(DrawRequest{Kind: KindGround, Name: "grass", Points: points(at(50, 50)), Size: 3})
-		var grounds []uint16
+		var grounds []uint32
 		for y := 47; y <= 53; y++ {
 			for x := 47; x <= 53; x++ {
 				if tile := e.Map.Tile(at(x, y)); tile != nil {

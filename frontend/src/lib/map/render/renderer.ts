@@ -343,7 +343,7 @@ export class MapRenderer {
 	}
 
 	/** Tile::hasTopGround: a ground or ground border two tiles a side. */
-	private hasTopGround(scene: Scene, ids: Uint16Array): boolean {
+	private hasTopGround(scene: Scene, ids: Uint32Array): boolean {
 		for (const id of ids) {
 			const look = scene.looks.items.get(scene.items.client[id]);
 			if (look && look.width + look.height === 4 && look.flags & (AF.ground | AF.border)) return true;

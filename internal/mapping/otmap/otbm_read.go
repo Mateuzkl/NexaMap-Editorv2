@@ -400,7 +400,7 @@ attrs:
 // place puts an item on a tile: the first ground item becomes the ground,
 // everything else keeps the file order.
 func (r *reader) place(tile *Tile, item Item) {
-	if itemType := r.items.Get(item.ID); itemType != nil && itemType.IsGround() && tile.Ground.ID == 0 && len(tile.Items) == 0 {
+	if itemType := lookupItem(r.items, item.ID); itemType != nil && itemType.IsGround() && tile.Ground.ID == 0 && len(tile.Items) == 0 {
 		tile.Ground = item
 		return
 	}
@@ -409,16 +409,16 @@ func (r *reader) place(tile *Tile, item Item) {
 
 // hasCountByte reports whether a compact item has a count byte: OTBM 1
 // stores one for stackables and fluids.
-func (r *reader) hasCountByte(id uint16) bool {
+func (r *reader) hasCountByte(id uint32) bool {
 	if r.version > 1 {
 		return false
 	}
-	itemType := r.items.Get(id)
+	itemType := lookupItem(r.items, id)
 	return itemType != nil && itemType.Flags&(otitems.FlagStackable|otitems.FlagSplash|otitems.FlagFluidContainer) != 0
 }
 
 func (r *reader) compactItem(props *otbnode.Reader) (Item, bool) {
-	item := Item{ID: props.U16()}
+	item := Item{ID: uint32(props.U16())}
 	if r.hasCountByte(item.ID) {
 		item.Subtype = uint16(props.U8())
 	}

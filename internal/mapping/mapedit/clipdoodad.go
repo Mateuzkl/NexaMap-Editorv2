@@ -12,12 +12,15 @@ func (c *Clip) DoodadBrush(name string) (materials.Brush, error) {
 	composite := materials.Composite{Chance: 1}
 	for _, tile := range c.Tiles {
 		compositeTile := materials.CompositeTile{X: tile.DX, Y: tile.DY, Z: tile.DZ}
-		if tile.Ground != nil {
-			compositeTile.Items = append(compositeTile.Items, materials.ItemSpec{ID: tile.Ground.ID, Subtype: tile.Ground.Subtype})
+		if tile.Ground != nil && tile.Ground.ID <= 0xFFFF {
+			compositeTile.Items = append(compositeTile.Items, materials.ItemSpec{ID: uint16(tile.Ground.ID), Subtype: tile.Ground.Subtype})
 		}
 		for _, item := range tile.Items {
+			if item.ID > 0xFFFF {
+				continue
+			}
 			compositeTile.Items = append(compositeTile.Items, materials.ItemSpec{
-				ID: item.ID, Subtype: item.Subtype, ActionID: item.ActionID(), UniqueID: item.UniqueID(),
+				ID: uint16(item.ID), Subtype: item.Subtype, ActionID: item.ActionID(), UniqueID: item.UniqueID(),
 			})
 		}
 		if len(compositeTile.Items) > 0 {

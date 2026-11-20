@@ -85,10 +85,10 @@ func (ms *MapService) Find(id int, query mapedit.FindQuery) (found FindResult, e
 				found.Results = []mapedit.FindResult{}
 				return nil
 			}
-			var serverIDs []uint16
+			var serverIDs []uint32
 			data.items.Each(func(it *otitems.Type) {
-				if it.EffectiveID() <= 0xFFFF && clientIDs[it.EffectiveClientID()] {
-					serverIDs = append(serverIDs, uint16(it.EffectiveID()))
+				if clientIDs[it.EffectiveClientID()] {
+					serverIDs = append(serverIDs, it.EffectiveID())
 				}
 			})
 			if len(serverIDs) == 0 {
@@ -104,11 +104,11 @@ func (ms *MapService) Find(id int, query mapedit.FindQuery) (found FindResult, e
 }
 
 // Replace replaces items (to 0 removes them).
-func (ms *MapService) Replace(id int, from, to []uint16, inSelection bool) (MapChange, error) {
+func (ms *MapService) Replace(id int, from, to []uint32, inSelection bool) (MapChange, error) {
 	if len(from) != len(to) {
 		return MapChange{}, errors.New("replace needs pairs of ids")
 	}
-	replacements := map[uint16]uint16{}
+	replacements := map[uint32]uint32{}
 	for i := range from {
 		replacements[from[i]] = to[i]
 	}
@@ -133,7 +133,7 @@ func (ms *MapService) QuickReplaceCandidates(id int, inSelection bool) ([]mapedi
 
 // QuickReplaceChoices returns replacement target items scored (0..100%) by
 // item category, flags, brush family, map co-occurrence, and sprite similarity.
-func (ms *MapService) QuickReplaceChoices(id int, sourceID uint16, category string, sameCategory bool, query string, limit int) ([]mapedit.QuickReplaceChoice, error) {
+func (ms *MapService) QuickReplaceChoices(id int, sourceID uint32, category string, sameCategory bool, query string, limit int) ([]mapedit.QuickReplaceChoice, error) {
 	if limit <= 0 || limit > 400 {
 		limit = 160
 	}
@@ -145,7 +145,7 @@ func (ms *MapService) QuickReplaceChoices(id int, sourceID uint16, category stri
 		if items == nil {
 			return nil
 		}
-		baseType := items.Get(sourceID)
+		baseType := items.Get32(sourceID)
 		baseCat := category
 		if baseCat == "" && sourceID != 0 {
 			baseCat = editor.ClassifyItem(sourceID)
@@ -163,15 +163,15 @@ func (ms *MapService) QuickReplaceChoices(id int, sourceID uint16, category stri
 			}
 		}
 
-		subScore := map[uint16]float64{}
-		if opened.suggestions != nil && sourceID != 0 {
-			for _, s := range opened.suggestions.Substitutes(sourceID, 64) {
-				subScore[s.ID] = s.Score
+		subScore := map[uint32]float64{}
+		if opened.suggestions != nil && sourceID != 0 && sourceID <= 0xFFFF {
+			for _, s := range opened.suggestions.Substitutes(uint16(sourceID), 64) {
+				subScore[uint32(s.ID)] = s.Score
 			}
 		}
 
 		type cand struct {
-			id       uint16
+			id       uint32
 			name     string
 			cat      string
 			brush    string
@@ -179,11 +179,10 @@ func (ms *MapService) QuickReplaceChoices(id int, sourceID uint16, category stri
 		}
 		var pool []cand
 		items.Each(func(it *otitems.Type) {
-			eid := it.EffectiveID()
-			if eid == 0 || eid > 0xFFFF || it.EffectiveClientID() == 0 || it.Flags.Has(otitems.FlagMeta) {
+			itemID := it.EffectiveID()
+			if itemID == 0 || it.EffectiveClientID() == 0 || it.Flags.Has(otitems.FlagMeta) {
 				return
 			}
-			itemID := uint16(eid)
 			if itemID == sourceID {
 				return
 			}
@@ -200,7 +199,7 @@ func (ms *MapService) QuickReplaceChoices(id int, sourceID uint16, category stri
 				name = fmt.Sprintf("item %d", itemID)
 			}
 			if q != "" {
-				idStr := strconv.Itoa(int(itemID))
+				idStr := strconv.FormatUint(uint64(itemID), 10)
 				if !strings.Contains(strings.ToLower(name), q) &&
 					!strings.Contains(idStr, q) &&
 					!strings.Contains(strings.ToLower(brushName), q) {
@@ -271,7 +270,7 @@ func (ms *MapService) QuickReplaceChoices(id int, sourceID uint16, category stri
 
 		// Refine the top slice with real sprite color/coverage/size visual similarity.
 		refineCap := min(len(pool), max(limit*2, 320))
-		refineIDs := make([]uint16, refineCap)
+		refineIDs := make([]uint32, refineCap)
 		for i := 0; i < refineCap; i++ {
 			refineIDs[i] = pool[i].id
 		}

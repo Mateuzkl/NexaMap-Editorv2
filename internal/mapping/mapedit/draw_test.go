@@ -10,7 +10,7 @@ import (
 
 func drawSetGround(e *Editor, ground uint16, positions ...otmap.Position) {
 	for _, pos := range positions {
-		e.Map.SetTile(pos, &otmap.Tile{Ground: otmap.Item{ID: ground}})
+		e.Map.SetTile(pos, &otmap.Tile{Ground: otmap.Item{ID: uint32(ground)}})
 	}
 }
 
@@ -19,7 +19,7 @@ func drawGroundAt(e *Editor, pos otmap.Position) uint16 {
 	if tile == nil {
 		return 0
 	}
-	return tile.Ground.ID
+	return uint16(tile.Ground.ID)
 }
 
 func drawIsGrass(id uint16) bool { return id == grassA || id == grassB }
@@ -492,8 +492,8 @@ func TestDrawRawReplaceBottomKeepsCommonItems(t *testing.T) {
 func TestDrawRawEraseRemovesItemAndGround(t *testing.T) {
 	cases := []struct {
 		name       string
-		item       uint16
-		wantGround uint16
+		item       uint32
+		wantGround uint32
 		wantItems  []uint16
 	}{
 		{"item", stoneID, sandID, []uint16{bagID}},
@@ -538,7 +538,7 @@ func TestEraserRemovesItems(t *testing.T) {
 		name        string
 		leaveUnique bool
 		erase       bool
-		wantGround  uint16
+		wantGround  uint32
 		wantItems   []uint16
 	}{
 		{"leave unique keeps borders and items with attributes", true, false, sandID, []uint16{borderN, stoneID}},

@@ -32,7 +32,7 @@ class Writer {
 }
 
 function simpleChunk(writer: Writer, key: number, index: number, itemId: number): Writer {
-	return writer.u32(key).u16(1).u16(index).u16(0).u8(1).u16(itemId).u16(0).u8(0);
+	return writer.u32(key).u16(1).u16(index).u16(0).u8(1).u32(itemId).u16(0).u8(0);
 }
 
 describe("chunk keys", () => {
@@ -70,7 +70,7 @@ describe("decodeChunks", () => {
 			TileFlags.pz;
 		const writer = new Writer().u32(chunkKey(1, 2, 7)).u16(1);
 		writer.u16(33).u16(flags).u32(77);
-		writer.u8(2).u16(100).u16(0).u8(0).u16(200).u16(5).u8(ItemFlags.text);
+		writer.u8(2).u32(100).u16(0).u8(0).u32(66625).u16(5).u8(ItemFlags.text);
 		// creatures: an npc facing 2, selected
 		writer
 			.u8(1)
@@ -94,7 +94,7 @@ describe("decodeChunks", () => {
 		const tile = chunk.tiles[33]!;
 		expect(tile.flags).toBe(flags);
 		expect(tile.house).toBe(77);
-		expect([...tile.ids]).toEqual([100, 200]);
+		expect([...tile.ids]).toEqual([100, 66625]);
 		expect([...tile.subs]).toEqual([0, 5]);
 		expect([...tile.itemFlags]).toEqual([0, ItemFlags.text]);
 		expect(tile.creatures).toEqual([

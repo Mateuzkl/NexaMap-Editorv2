@@ -198,7 +198,7 @@ function fakeChunks(log: string[]): ChunkStore {
 				if (hash % 5 !== 0) tiles.set(tileKey, undefined);
 				else {
 					const count = 1 + (hash % 4);
-					const ids = Uint16Array.from({ length: count }, (_, i) => 1 + (mix(hash, i) % 520));
+					const ids = Uint32Array.from({ length: count }, (_, i) => 1 + (mix(hash, i) % 520));
 					tiles.set(tileKey, {
 						flags: (hash % 3 === 0 ? 1 : 0) | (hash % 7 === 0 ? 256 : 0) | (hash % 9 === 0 ? 512 : 0),
 						house: 0,

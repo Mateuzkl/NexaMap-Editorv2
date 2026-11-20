@@ -140,13 +140,17 @@ func (w *WallBrush) pick(align int, rng *rand.Rand) uint16 {
 	return 0
 }
 
-func (w *WallBrush) hasWall(id uint16, align int) bool {
+func (w *WallBrush) hasWall(id uint32, align int) bool {
+	if id > 0xFFFF {
+		return false
+	}
+	id16 := uint16(id)
 	for wall, depth := w, 0; wall != nil && depth < maxWallRedirects; wall, depth = wall.redirect, depth+1 {
-		if wall.nodes[align].items.has(id) {
+		if wall.nodes[align].items.has(id16) {
 			return true
 		}
 		for _, door := range wall.nodes[align].doors {
-			if door.id == id {
+			if door.id == id16 {
 				return true
 			}
 		}
@@ -209,7 +213,7 @@ func (d *DoodadBrush) alt(variation int) *doodadAlt {
 	return d.alts[variation%len(d.alts)]
 }
 
-func (d *DoodadBrush) owns(id uint16) bool { return d.owned[id] }
+func (d *DoodadBrush) owns(id uint32) bool { return id <= 0xFFFF && d.owned[uint16(id)] }
 
 type itemInfo struct {
 	ground           *GroundBrush
@@ -239,7 +243,7 @@ type Brushes struct {
 	carpets   map[string]*CarpetBrush
 	tables    map[string]*TableBrush
 	doodads   map[string]*DoodadBrush
-	info      map[uint16]*itemInfo
+	info      map[uint32]*itemInfo
 	nextID    int
 	// mixes counts the brushes made from suggestions (see AddMix).
 	mixes    int
@@ -256,7 +260,7 @@ func NewBrushes(items *otitems.DB, materialsDB *materials.Materials) *Brushes {
 	brushes := &Brushes{
 		items: items, Materials: materialsDB,
 		grounds: map[string]*GroundBrush{}, walls: map[string]*WallBrush{}, carpets: map[string]*CarpetBrush{},
-		tables: map[string]*TableBrush{}, doodads: map[string]*DoodadBrush{}, info: map[uint16]*itemInfo{},
+		tables: map[string]*TableBrush{}, doodads: map[string]*DoodadBrush{}, info: map[uint32]*itemInfo{},
 	}
 	items.MarkMeta(materialsDB.MetaItems)
 	borders := brushes.indexBorders(materialsDB.Borders)
@@ -349,10 +353,11 @@ func (b *Brushes) resolveWallRedirects() {
 }
 
 func (b *Brushes) infoFor(id uint16) *itemInfo {
-	info := b.info[id]
+	key := uint32(id)
+	info := b.info[key]
 	if info == nil {
 		info = &itemInfo{}
-		b.info[id] = info
+		b.info[key] = info
 	}
 	return info
 }
@@ -620,7 +625,7 @@ func (b *Brushes) Table(name string) *TableBrush { return b.tables[lower(name)] 
 
 func (b *Brushes) Doodad(name string) *DoodadBrush { return b.doodads[lower(name)] }
 
-func (b *Brushes) GroundOf(id uint16) *GroundBrush {
+func (b *Brushes) GroundOf(id uint32) *GroundBrush {
 	if info := b.info[id]; info != nil {
 		return info.ground
 	}
@@ -629,7 +634,7 @@ func (b *Brushes) GroundOf(id uint16) *GroundBrush {
 
 // BrushOf returns the name and kind of the brush that owns an item, for
 // "pick brush" (empty when none).
-func (b *Brushes) BrushOf(id uint16) (name, kind string) {
+func (b *Brushes) BrushOf(id uint32) (name, kind string) {
 	info := b.info[id]
 	switch {
 	case info == nil:
@@ -670,20 +675,20 @@ func (b *Brushes) Look(name string) uint16 {
 	return 0
 }
 
-func (b *Brushes) isBorder(id uint16) bool {
+func (b *Brushes) isBorder(id uint32) bool {
 	if info := b.info[id]; info != nil && info.border {
 		return true
 	}
-	itemType := b.items.Get(id)
+	itemType := b.items.Get32(id)
 	return itemType != nil && itemType.TopOrder == borderTopOrder
 }
 
-func (b *Brushes) IsDoor(id uint16) bool {
+func (b *Brushes) IsDoor(id uint32) bool {
 	info := b.info[id]
 	return info != nil && info.door
 }
 
-func (b *Brushes) wallOf(id uint16) (*WallBrush, *itemInfo) {
+func (b *Brushes) wallOf(id uint32) (*WallBrush, *itemInfo) {
 	info := b.info[id]
 	if info == nil || info.wall == nil {
 		return nil, nil

@@ -61,11 +61,11 @@ func (ms *MapService) RemoveItem(id int, ref mapedit.ItemRef) (MapChange, error)
 	return ms.editMap(id, func(editor *mapedit.Editor) error { return editor.RemoveItem(ref) })
 }
 
-func (ms *MapService) AddItem(id int, pos otmap.Position, item uint16) (MapChange, error) {
+func (ms *MapService) AddItem(id int, pos otmap.Position, item uint32) (MapChange, error) {
 	return ms.editMap(id, func(editor *mapedit.Editor) error { return editor.AddItem(pos, item) })
 }
 
-func (ms *MapService) AddToContainer(id int, ref mapedit.ItemRef, item uint16) (MapChange, error) {
+func (ms *MapService) AddToContainer(id int, ref mapedit.ItemRef, item uint32) (MapChange, error) {
 	return ms.editMap(id, func(editor *mapedit.Editor) error { return editor.AddToContainer(ref, item) })
 }
 

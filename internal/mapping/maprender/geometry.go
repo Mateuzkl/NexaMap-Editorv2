@@ -343,7 +343,7 @@ func (b *geometryBuilder) composedPiece(group *thing.FrameGroup, index int, spri
 
 func (b *geometryBuilder) item(item otmap.Item, position tilePosition, anchorX, anchorY int, color tint, hook int) int {
 	spriteSize := b.scene.SpriteSize
-	itemType := b.scene.Items.Get(item.ID)
+	itemType := b.scene.Items.Get32(item.ID)
 	if itemType == nil {
 		b.rect(anchorX, anchorY, spriteSize, spriteSize, unknownItemColor.withAlpha(unknownItemColor.alpha*color.alpha))
 		return 0
@@ -354,13 +354,14 @@ func (b *geometryBuilder) item(item otmap.Item, position tilePosition, anchorX, 
 	if itemType.Flags.Has(otitems.FlagMeta) {
 		return 0
 	}
-	look := b.lookOf(thing.CategoryItem, uint32(itemType.ClientID))
+	clientID := itemType.EffectiveClientID()
+	look := b.lookOf(thing.CategoryItem, clientID)
 	if look == nil {
 		b.rect(anchorX, anchorY, spriteSize, spriteSize, missingSpriteColor.withAlpha(missingSpriteColor.alpha*color.alpha))
 		return 0
 	}
 	at := itemPattern(itemType, look, item.Subtype, position, hook)
-	b.drawLook(look, uint32(itemType.ClientID), at, anchorX, anchorY, color, b.view(ViewAnimation), nil)
+	b.drawLook(look, clientID, at, anchorX, anchorY, color, b.view(ViewAnimation), nil)
 	if look.lightLevel > 0 {
 		b.light(look, at, anchorX, anchorY)
 	}
@@ -412,7 +413,7 @@ func (b *geometryBuilder) creature(creature otmap.Creature, position tilePositio
 	}
 	outfit := b.scene.Outfit(creature.Name)
 	if outfit.LookItem != 0 {
-		b.item(otmap.Item{ID: outfit.LookItem}, position, anchorX, anchorY, color, hookNone)
+		b.item(otmap.Item{ID: uint32(outfit.LookItem)}, position, anchorX, anchorY, color, hookNone)
 		return
 	}
 	if outfit.LookType == 0 {
@@ -506,7 +507,7 @@ func (b *geometryBuilder) tileTint(tile *otmap.Tile, hasThings bool) tint {
 func (b *geometryBuilder) tileHook(tile *otmap.Tile) int {
 	hook := hookNone
 	for _, item := range tile.Items {
-		if itemType := b.scene.Items.Get(item.ID); itemType != nil {
+		if itemType := b.scene.Items.Get32(item.ID); itemType != nil {
 			if itemType.Flags.Has(otitems.FlagHookSouth) {
 				hook = hookSouth
 			} else if itemType.Flags.Has(otitems.FlagHookEast) {
@@ -550,7 +551,7 @@ func (b *geometryBuilder) tile(tile *otmap.Tile, position tilePosition, anchorX,
 	var topItems []otmap.Item
 	for _, pass := range [...]uint8{topBorder, topBottom, topCommon} {
 		for _, item := range tile.Items {
-			itemType := b.scene.Items.Get(item.ID)
+			itemType := b.scene.Items.Get32(item.ID)
 			topOrder := uint8(topCommon)
 			if itemType != nil {
 				topOrder = itemType.TopOrder
@@ -586,7 +587,7 @@ func (b *geometryBuilder) tile(tile *otmap.Tile, position tilePosition, anchorX,
 	b.onTop = true
 	topElevation := 0
 	for _, item := range topItems {
-		if b.skip(b.scene.Items.Get(item.ID)) {
+		if b.skip(b.scene.Items.Get32(item.ID)) {
 			continue
 		}
 		topElevation += b.item(item, position, anchorX-topElevation, anchorY-topElevation, white.scaled(selectionDim(item)), hook)

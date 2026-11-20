@@ -170,7 +170,7 @@ func takeSamples(gameMap *otmap.Map, ignore func(id uint16) bool, count int, see
 	gameMap.Each(func(pos otmap.Position, tile *otmap.Tile) {
 		var single []uint16
 		for _, item := range tile.Items {
-			if ignore(item.ID) {
+			if item.ID > 0xFFFF || ignore(uint16(item.ID)) {
 				continue
 			}
 			copies := 0
@@ -180,7 +180,7 @@ func takeSamples(gameMap *otmap.Map, ignore func(id uint16) bool, count int, see
 				}
 			}
 			if copies == 1 {
-				single = append(single, item.ID)
+				single = append(single, uint16(item.ID))
 			}
 		}
 		if len(single) == 0 {
@@ -196,7 +196,7 @@ func takeSamples(gameMap *otmap.Map, ignore func(id uint16) bool, count int, see
 	})
 	for _, sample := range chosen {
 		tile := gameMap.Tile(sample.pos).Clone()
-		tile.Items = slices.DeleteFunc(tile.Items, func(item otmap.Item) bool { return item.ID == sample.item })
+		tile.Items = slices.DeleteFunc(tile.Items, func(item otmap.Item) bool { return item.ID == uint32(sample.item) })
 		gameMap.SetTile(sample.pos, tile)
 	}
 	return chosen
@@ -208,18 +208,18 @@ func contextAt(gameMap *otmap.Map, pos otmap.Position, ignore func(id uint16) bo
 	collect := func(tile *otmap.Tile) []uint16 {
 		var ids []uint16
 		for _, item := range tile.Items {
-			if !ignore(item.ID) {
-				ids = append(ids, item.ID)
+			if item.ID <= 0xFFFF && !ignore(uint16(item.ID)) {
+				ids = append(ids, uint16(item.ID))
 			}
 		}
 		return ids
 	}
 	if tile := gameMap.Tile(pos); tile != nil {
-		place.Ground, place.Items = tile.Ground.ID, collect(tile)
+		place.Ground, place.Items = uint16(tile.Ground.ID), collect(tile)
 	}
 	for direction, offset := range Offsets {
 		if tile := gameMap.PeekAt(int(pos.X)+offset[0], int(pos.Y)+offset[1], int(pos.Z), &otmap.Tile{}, nil); tile != nil {
-			place.Neighbors[direction] = Cell{Ground: tile.Ground.ID, Items: collect(tile)}
+			place.Neighbors[direction] = Cell{Ground: uint16(tile.Ground.ID), Items: collect(tile)}
 		}
 	}
 	return place

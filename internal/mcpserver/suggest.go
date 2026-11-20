@@ -42,7 +42,7 @@ type namedSuggestion struct {
 }
 
 type namedItem struct {
-	Item uint16 `json:"item"`
+	Item uint32 `json:"item"`
 	Name string `json:"name,omitempty"`
 }
 
@@ -51,15 +51,15 @@ type namedPart struct {
 	namedItem
 }
 
-func itemID(id int) (uint16, error) {
-	if id <= 0 || id > 0xFFFF {
+func itemID(id int) (uint32, error) {
+	if id <= 0 || int64(id) > 0xFFFFFFFF {
 		return 0, fmt.Errorf("item id %d is out of range", id)
 	}
-	return uint16(id), nil
+	return uint32(id), nil
 }
 
-func (s *Server) itemName(id uint16) string {
-	item, err := s.maps.Item(id)
+func (s *Server) itemName(id uint32) string {
+	item, err := s.maps.Item32(id)
 	if err != nil {
 		return ""
 	}
@@ -69,7 +69,7 @@ func (s *Server) itemName(id uint16) string {
 func (s *Server) nameSuggestions(list []app.Suggestion) []namedSuggestion {
 	out := make([]namedSuggestion, 0, len(list))
 	for _, suggestion := range list {
-		out = append(out, namedSuggestion{Suggestion: suggestion, Name: s.itemName(suggestion.Item)})
+		out = append(out, namedSuggestion{Suggestion: suggestion, Name: s.itemName(uint32(suggestion.Item))})
 	}
 	return out
 }
@@ -87,9 +87,10 @@ func (s *Server) addSuggestTools(server *mcp.Server) {
 			}
 			brush := app.SuggestBrush{Kind: args.Kind, Name: args.Name}
 			if args.Kind == "raw" {
-				if brush.Item, err = itemID(args.Item); err != nil {
-					return nil, err
+				if args.Item <= 0 || args.Item > 0xFFFF {
+					return nil, fmt.Errorf("item id %d is out of range", args.Item)
 				}
+				brush.Item = uint16(args.Item)
 			}
 			suggestions, err := s.maps.Suggest(id, pos, brush)
 			if err != nil {

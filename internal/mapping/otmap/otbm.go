@@ -55,6 +55,23 @@ type Items interface {
 	Get(id uint16) *otitems.Type
 }
 
+type items32 interface {
+	Get32(id uint32) *otitems.Type
+}
+
+func lookupItem(items Items, id uint32) *otitems.Type {
+	if items == nil || id == 0 {
+		return nil
+	}
+	if db32, ok := items.(items32); ok {
+		return db32.Get32(id)
+	}
+	if id <= 0xFFFF {
+		return items.Get(uint16(id))
+	}
+	return nil
+}
+
 // Format holds OTBM variants of server forks. The zero value is the
 // standard format.
 type Format struct {

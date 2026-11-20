@@ -47,7 +47,7 @@ func TestChunkPacking(t *testing.T) {
 func TestChunkRepack(t *testing.T) {
 	m := New(100, 100)
 	for i := range 64 {
-		m.SetTile(Position{uint16(i % 32), uint16(i / 32), 7}, &Tile{Ground: Item{ID: uint16(100 + i)}})
+		m.SetTile(Position{uint16(i % 32), uint16(i / 32), 7}, &Tile{Ground: Item{ID: uint32(100 + i)}})
 	}
 	c := m.Chunk(MakeKey(0, 0, 7))
 	// Replace most packed tiles with working copies: the dead ones are dropped.
@@ -62,7 +62,7 @@ func TestChunkRepack(t *testing.T) {
 		t.Fatalf("not repacked: %d packed", len(c.packed))
 	}
 	for i := range 64 {
-		if g := m.Tile(Position{uint16(i % 32), uint16(i / 32), 7}).Ground.ID; g != uint16(100+i) {
+		if g := m.Tile(Position{uint16(i % 32), uint16(i / 32), 7}).Ground.ID; g != uint32(100+i) {
 			t.Fatalf("tile %d ground %d", i, g)
 		}
 	}

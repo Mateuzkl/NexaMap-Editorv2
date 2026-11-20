@@ -113,11 +113,11 @@ func (brush Brush) request() (mapedit.DrawRequest, error) {
 	if !slices.Contains(drawOrder, brush.Kind) {
 		return mapedit.DrawRequest{}, fmt.Errorf("unknown brush kind %q", brush.Kind)
 	}
-	if brush.Item < 0 || brush.Item > 0xFFFF || brush.House < 0 || brush.Zone < 0 || brush.Zone > 0xFFFF {
+	if brush.Item < 0 || int64(brush.Item) > 0xFFFFFFFF || brush.House < 0 || brush.Zone < 0 || brush.Zone > 0xFFFF {
 		return mapedit.DrawRequest{}, errors.New("item, house or zone id out of range")
 	}
 	request := mapedit.DrawRequest{
-		Kind: brush.Kind, Name: brush.Name, Item: uint16(brush.Item), House: uint32(brush.House), Waypoint: brush.Waypoint,
+		Kind: brush.Kind, Name: brush.Name, Item: uint32(brush.Item), House: uint32(brush.House), Waypoint: brush.Waypoint,
 		Creature: brush.Creature, SpawnTime: int32(brush.SpawnTime), Direction: defaultDirection, Zone: uint16(brush.Zone),
 		DoorType: brush.DoorType, Erase: brush.Erase, Alt: brush.Alt, Variation: brush.Variation, Thickness: brush.Thickness,
 	}
