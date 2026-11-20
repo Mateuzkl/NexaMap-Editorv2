@@ -206,8 +206,9 @@
 				/><button class="t-btn" onclick={() => file("materialsPath", "Brush file", "*.json")}>…</button>
 			</div>
 			<p class="t-label hint">
-				{data?.brushes ?? 0} brushes, {data?.tilesets ?? 0} tilesets, {data?.creatures ?? 0} creatures. Brushes are
-				kept in the editor's own format (JSON), shared by all maps of the client.
+				{(map.palette?.brushes?.length ?? data?.brushes ?? 0).toLocaleString()} active brushes (built-in NexaMap catalog
+				+ {data?.brushes ?? 0} custom), {map.palette?.tilesets?.length ?? data?.tilesets ?? 0} collections,
+				{map.palette?.creatures?.length ?? data?.creatures ?? 0} creatures.
 			</p>
 			<div class="row wrap">
 				<button class="t-btn primary" onclick={importRME}>Import from Remere's Map Editor…</button>

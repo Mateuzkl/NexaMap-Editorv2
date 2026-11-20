@@ -213,3 +213,27 @@ func TestAutoTilesets(t *testing.T) {
 		t.Fatalf("sets = %v", names)
 	}
 }
+
+func TestBuiltinMaterials(t *testing.T) {
+	otb := BuiltinMaterials(otitems.ModeOTB)
+	if len(otb.Brushes) < 1500 || len(otb.Borders) < 150 || len(otb.Tilesets) < 40 {
+		t.Fatalf("otb builtin too small: brushes=%d borders=%d tilesets=%d", len(otb.Brushes), len(otb.Borders), len(otb.Tilesets))
+	}
+	if g := otb.Brush("grass"); g == nil || g.Type != TypeGround || g.Look != 4526 {
+		t.Fatalf("otb grass brush = %+v", g)
+	}
+	if w := otb.Brush("stone wall"); w == nil || w.Type != TypeWall || len(w.Walls) == 0 {
+		t.Fatalf("otb stone wall = %+v", w)
+	}
+
+	client := BuiltinMaterials(otitems.ModeClient)
+	if len(client.Brushes) < 1800 || len(client.Borders) < 180 || len(client.Tilesets) < 80 {
+		t.Fatalf("client builtin too small: brushes=%d borders=%d tilesets=%d", len(client.Brushes), len(client.Borders), len(client.Tilesets))
+	}
+	if g := client.Brush("grass"); g == nil || g.Type != TypeGround || g.Look != 4515 {
+		t.Fatalf("client grass brush = %+v", g)
+	}
+	if w := client.Brush("stone wall"); w == nil || w.Type != TypeWall || len(w.Walls) == 0 {
+		t.Fatalf("client stone wall = %+v", w)
+	}
+}

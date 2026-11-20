@@ -51,6 +51,7 @@ type mapData struct {
 	otbPath       string
 	items         *otitems.DB
 	materials     *materials.Materials
+	effective     *materials.Materials
 	materialsPath string
 	brushes       *mapedit.Brushes
 	// creatures holds every known creature by lower case name; the
@@ -211,8 +212,150 @@ func (data *mapData) loadMaterials(storeDir string) {
 	}
 }
 
+func (data *mapData) hasItem(id uint16) bool {
+	if id == 0 || data.items == nil {
+		return false
+	}
+	it := data.items.Get(id)
+	return it != nil && it.EffectiveClientID() != 0
+}
+
+func (data *mapData) resolveBrushLook(brush *materials.Brush, fallback uint16) uint16 {
+	if data.hasItem(fallback) {
+		return fallback
+	}
+	if data.hasItem(brush.Look) {
+		return brush.Look
+	}
+	for _, ch := range brush.Items {
+		if data.hasItem(ch.ID) {
+			return ch.ID
+		}
+	}
+	for _, align := range materials.WallAlignments {
+		if part := brush.Walls[align]; part != nil {
+			for _, ch := range part.Items {
+				if data.hasItem(ch.ID) {
+					return ch.ID
+				}
+			}
+		}
+	}
+	for _, chances := range brush.Parts {
+		for _, ch := range chances {
+			if data.hasItem(ch.ID) {
+				return ch.ID
+			}
+		}
+	}
+	for _, alt := range brush.Alternatives {
+		for _, single := range alt.Singles {
+			if data.hasItem(single.Item.ID) {
+				return single.Item.ID
+			}
+		}
+		for _, comp := range alt.Composites {
+			for _, tile := range comp.Tiles {
+				for _, item := range tile.Items {
+					if data.hasItem(item.ID) {
+						return item.ID
+					}
+				}
+			}
+		}
+	}
+	return 0
+}
+
+func (data *mapData) buildEffectiveMaterials() *materials.Materials {
+	user := data.materials
+	if user == nil {
+		user = materials.New()
+	}
+	var mode otitems.Mode = otitems.ModeOTB
+	if data.items != nil {
+		mode = data.items.Mode
+	}
+	builtin := materials.BuiltinMaterials(mode)
+	eff := &materials.Materials{
+		Version:   materials.FormatVersion,
+		Borders:   make([]*materials.Border, 0, len(user.Borders)+len(builtin.Borders)),
+		Brushes:   make([]*materials.Brush, 0, len(user.Brushes)+len(builtin.Brushes)),
+		Tilesets:  make([]*materials.Tileset, 0, len(user.Tilesets)+len(builtin.Tilesets)),
+		Creatures: user.Creatures,
+		MetaItems: make([]uint16, 0, len(user.MetaItems)+len(builtin.MetaItems)),
+	}
+
+	userBrushes := make(map[string]bool, len(user.Brushes))
+	for _, b := range user.Brushes {
+		eff.Brushes = append(eff.Brushes, b)
+		userBrushes[strings.ToLower(b.Name)] = true
+	}
+
+	// Only layer the bundled Tibia/RME catalog when the loaded client actually
+	// contains a matching item set (avoids polluting tiny synthetic projects).
+	var matchedBuiltin []*materials.Brush
+	for _, b := range builtin.Brushes {
+		if userBrushes[strings.ToLower(b.Name)] {
+			continue
+		}
+		if data.resolveBrushLook(b, b.Look) == 0 {
+			continue
+		}
+		matchedBuiltin = append(matchedBuiltin, b)
+	}
+	useBuiltin := len(matchedBuiltin) >= 5
+	if useBuiltin {
+		eff.Brushes = append(eff.Brushes, matchedBuiltin...)
+	}
+
+	userBorders := make(map[uint32]bool, len(user.Borders))
+	for _, b := range user.Borders {
+		eff.Borders = append(eff.Borders, b)
+		userBorders[b.ID] = true
+	}
+	if useBuiltin {
+		for _, b := range builtin.Borders {
+			if !userBorders[b.ID] {
+				eff.Borders = append(eff.Borders, b)
+			}
+		}
+	}
+
+	userTilesets := make(map[string]bool, len(user.Tilesets))
+	for _, ts := range user.Tilesets {
+		eff.Tilesets = append(eff.Tilesets, ts)
+		userTilesets[strings.ToLower(ts.Name)] = true
+	}
+	if useBuiltin {
+		for _, ts := range builtin.Tilesets {
+			if !userTilesets[strings.ToLower(ts.Name)] {
+				eff.Tilesets = append(eff.Tilesets, ts)
+			}
+		}
+	}
+
+	seenMeta := make(map[uint16]bool, len(user.MetaItems)+len(builtin.MetaItems))
+	for _, id := range user.MetaItems {
+		if !seenMeta[id] {
+			seenMeta[id] = true
+			eff.MetaItems = append(eff.MetaItems, id)
+		}
+	}
+	if useBuiltin {
+		for _, id := range builtin.MetaItems {
+			if !seenMeta[id] && data.items != nil && data.items.Get(id) != nil {
+				seenMeta[id] = true
+				eff.MetaItems = append(eff.MetaItems, id)
+			}
+		}
+	}
+	return eff
+}
+
 func (data *mapData) index() {
-	data.brushes = mapedit.NewBrushes(data.items, data.materials)
+	data.effective = data.buildEffectiveMaterials()
+	data.brushes = mapedit.NewBrushes(data.items, data.effective)
 	data.creatures = map[string]*materials.CreatureType{}
 	for _, creature := range data.allCreatures() {
 		data.creatures[strings.ToLower(creature.Name)] = creature

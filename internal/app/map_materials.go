@@ -82,10 +82,15 @@ func (ms *MapService) ExportMaterials(path string) error {
 
 func (ms *MapService) Brush(name string) (brush *materials.Brush, err error) {
 	err = ms.withData(func(data *mapData) error {
-		if brush = data.materials.Brush(name); brush == nil {
-			return fmt.Errorf("no brush %q", name)
+		if brush = data.materials.Brush(name); brush != nil {
+			return nil
 		}
-		return nil
+		if data.effective != nil {
+			if brush = data.effective.Brush(name); brush != nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("no brush %q", name)
 	})
 	return brush, err
 }
