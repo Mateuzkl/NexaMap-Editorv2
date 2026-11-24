@@ -16,8 +16,9 @@
 	});
 
 	function pick(item: MenuItem) {
+		if (item.children?.length) return;
 		closeContextMenu();
-		if (!item.disabled?.()) item.action();
+		if (!item.disabled?.()) item.action?.();
 	}
 
 	function onmousedown(event: MouseEvent) {

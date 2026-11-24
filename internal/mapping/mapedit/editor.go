@@ -157,9 +157,11 @@ type Editor struct {
 	metaDirty         bool
 	doodad            *DoodadBuffer
 	selectedPositions map[otmap.Position]struct{}
-	replace           strokeReplace
-	peekScratch       otmap.Tile
-	peekItems         [32]otmap.Item
+	// selectionFloor remembers the camera floor of the active selection (-1: unset).
+	selectionFloor int
+	replace        strokeReplace
+	peekScratch    otmap.Tile
+	peekItems      [32]otmap.Item
 	// observer sees the changes of a shared map (see shared.go); foreign is
 	// set when other editors changed the map since the last save.
 	observer func(Commit)
@@ -183,6 +185,7 @@ func New(gameMap *otmap.Map, items *otitems.DB, brushes *Brushes) *Editor {
 		rng:               rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), rngStream)),
 		dirty:             map[otmap.ChunkKey]bool{},
 		selectedPositions: map[otmap.Position]struct{}{},
+		selectionFloor:    -1,
 	}
 }
 

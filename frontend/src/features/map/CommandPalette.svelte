@@ -2,6 +2,7 @@
 	// Ctrl+K: type a position, a place, a brush, an item, a creature or a
 	// command, and press Enter.
 	import { tick } from "svelte";
+	import { flattenMenuItems } from "../../lib/menu.svelte";
 	import { parsePos, fmtPos, type CreatureType, type PaletteBrush } from "../../lib/map/data/api";
 	import { goTo, mapCommands } from "../../lib/map/view/commands";
 	import { mapMenus } from "../../lib/map/view/menus";
@@ -32,22 +33,15 @@
 		map.command = null;
 	}
 
-	const commands = $derived.by<Entry[]>(() => {
-		const out: Entry[] = [];
-		for (const menu of mapMenus()) {
-			for (const menuItem of menu.items) {
-				if (menuItem === "-" || menuItem.disabled?.()) continue;
-				out.push({
-					group: "Commands",
-					label: menuItem.label.replace(/…$/, ""),
-					detail: menu.label,
-					keys: menuItem.keys,
-					run: menuItem.action,
-				});
-			}
-		}
-		return out;
-	});
+	const commands = $derived.by<Entry[]>(() =>
+		flattenMenuItems(mapMenus()).map((item) => ({
+			group: "Commands",
+			label: item.label,
+			detail: item.detail,
+			keys: item.keys,
+			run: item.action,
+		})),
+	);
 
 	const query = $derived(text.trim().toLowerCase());
 	const entries = $derived.by<Entry[]>(() => {

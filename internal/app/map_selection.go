@@ -8,7 +8,10 @@ import (
 	"github.com/nekiro/ots-creator/internal/mapping/otmap"
 )
 
-var errNothingSelected = errors.New("nothing is selected")
+var (
+	errNothingSelected       = errors.New("nothing is selected")
+	errClipboardModeMismatch = errors.New("the clipboard uses a different item ID mode; copy items from a map with the same mode")
+)
 
 // selectionEdit is edit for selection changes: Count is the size of the
 // selection afterwards.
@@ -50,13 +53,29 @@ func (ms *MapService) SelectAll(id int, floor int) (MapChange, error) {
 // Copy copies the selection to the clipboard (shared by all maps) and
 // returns the number of copied tiles.
 func (ms *MapService) Copy(id int) (tiles int, err error) {
+	return ms.copySelection(id, -1)
+}
+
+// CopyAt copies the selection anchored to floor (DZ = tile.Z - floor) so
+// multi-floor selections paste back onto the expected vertical floors.
+func (ms *MapService) CopyAt(id int, floor int) (tiles int, err error) {
+	return ms.copySelection(id, floor)
+}
+
+func (ms *MapService) copySelection(id int, floor int) (tiles int, err error) {
 	err = ms.withMap(id, func(opened *openMap, _ *mapData) error {
-		clip := opened.editor.Copy()
+		var clip *mapedit.Clip
+		if floor >= 0 {
+			clip = opened.editor.CopyAt(floor)
+		} else {
+			clip = opened.editor.Copy()
+		}
 		if clip == nil {
 			return errNothingSelected
 		}
 		ms.clipboard = clip
 		ms.clipboardMode = opened.editor.Items.Mode
+		ms.clipboardMapID = id
 		tiles = len(clip.Tiles)
 		return nil
 	})
@@ -64,13 +83,28 @@ func (ms *MapService) Copy(id int) (tiles int, err error) {
 }
 
 func (ms *MapService) Cut(id int) (MapChange, error) {
+	return ms.cutSelection(id, -1)
+}
+
+// CutAt copies the selection anchored to floor and deletes it in one undo step.
+func (ms *MapService) CutAt(id int, floor int) (MapChange, error) {
+	return ms.cutSelection(id, floor)
+}
+
+func (ms *MapService) cutSelection(id int, floor int) (MapChange, error) {
 	return ms.edit(id, func(editor *mapedit.Editor, _ *mapData) (int, error) {
-		clip := editor.Cut()
+		var clip *mapedit.Clip
+		if floor >= 0 {
+			clip = editor.CutAt(floor)
+		} else {
+			clip = editor.Cut()
+		}
 		if clip == nil {
 			return 0, errNothingSelected
 		}
 		ms.clipboard = clip
 		ms.clipboardMode = editor.Items.Mode
+		ms.clipboardMapID = id
 		return len(clip.Tiles), nil
 	})
 }
@@ -84,14 +118,44 @@ func (ms *MapService) Clipboard() *mapedit.Clip {
 	return ms.clipboard
 }
 
+// ClipboardFor returns the clipboard for map id, reporting an error if the
+// clipboard was copied from a map with an incompatible item ID mode.
+func (ms *MapService) ClipboardFor(id int) (*mapedit.Clip, error) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	if ms.clipboard == nil || len(ms.clipboard.Tiles) == 0 {
+		return nil, nil
+	}
+	if opened := ms.maps[id]; opened != nil && ms.clipboardMode != opened.editor.Items.Mode {
+		return nil, errClipboardModeMismatch
+	}
+	return ms.clipboard, nil
+}
+
 // Paste puts the clipboard with its top-left corner at pos.
 func (ms *MapService) Paste(id int, pos otmap.Position) (MapChange, error) {
-	return ms.editMap(id, func(editor *mapedit.Editor) error {
+	var strippedHouses bool
+	change, err := ms.edit(id, func(editor *mapedit.Editor, _ *mapData) (int, error) {
 		if ms.clipboard != nil && ms.clipboardMode != editor.Items.Mode {
-			return errors.New("the clipboard uses a different item ID mode; copy items from a map with the same mode")
+			return 0, errClipboardModeMismatch
 		}
-		return editor.Paste(ms.clipboard, pos)
+		if ms.clipboardMapID != 0 && ms.clipboardMapID != id {
+			var err error
+			strippedHouses, err = editor.PasteCrossMap(ms.clipboard, pos)
+			if err != nil {
+				return 0, err
+			}
+			return len(ms.clipboard.Tiles), nil
+		}
+		if err := editor.Paste(ms.clipboard, pos); err != nil {
+			return 0, err
+		}
+		return len(ms.clipboard.Tiles), nil
 	})
+	if err == nil && strippedHouses {
+		change.Warnings = append(change.Warnings, "Cleared source map house IDs when pasting into a different map to avoid house ID conflicts.")
+	}
+	return change, err
 }
 
 func (ms *MapService) DeleteSelection(id int) (MapChange, error) {

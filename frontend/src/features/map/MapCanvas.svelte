@@ -37,7 +37,15 @@
 	import { bresenhamLine, screenToTile } from "../../lib/map/editor/tileGeometry";
 	import { clamp } from "../../lib/util/math";
 	import { isTyping } from "../../lib/ui/typing";
-	import { edit, map, onMapChange, setCam, useCreature, type BrushSel } from "../../lib/map/state.svelte";
+	import {
+		edit,
+		map,
+		onMapChange,
+		resolveSelectionArgs,
+		setCam,
+		useCreature,
+		type BrushSel,
+	} from "../../lib/map/state.svelte";
 	import {
 		mapContextMenu,
 		openText,
@@ -95,7 +103,7 @@
 	}
 
 	let doodad: DoodadBuffer | null = null;
-	let clip: Clip | null = null;
+	let clip = $state.raw<Clip | null>(null);
 
 	// Frames drawn in the last second. The map draws on demand, so it reads 0 when nothing changes.
 	let frameTimes: number[] = [];
@@ -177,6 +185,7 @@
 				house: map.brush?.kind === "house" || map.brush?.kind === "houseExit" ? (map.brush.house ?? 0) : 0,
 				ghosts,
 				ghostAlpha: map.pasting ? GHOST_ALPHA.paste : GHOST_ALPHA.brush,
+				ghostAllFloors: map.pasting,
 				rects,
 				markers,
 				moveOffset: drag?.kind === "move" && (drag.dx || drag.dy) ? { dx: drag.dx, dy: drag.dy, dz: 0 } : null,
@@ -256,11 +265,22 @@
 	});
 
 	$effect(() => {
-		if (map.pasting) {
-			void MapService.Clipboard().then((clipboard) => {
-				clip = clipboard;
-				requestDraw();
-			});
+		const pasting = map.pasting;
+		const id = map.activeId;
+		void map.clipboardRev;
+		if (pasting && id !== null) {
+			void MapService.ClipboardFor(id)
+				.then((clipboard) => {
+					if (map.pasting && map.activeId === id) {
+						clip = clipboard;
+						requestDraw();
+					}
+				})
+				.catch((err) => {
+					clip = null;
+					map.pasting = false;
+					toast(errorMessage(err), "error");
+				});
 		} else clip = null;
 	});
 
@@ -342,8 +362,9 @@
 			return;
 		}
 		if (map.pasting) {
-			void edit((id) => MapService.Paste(id, tile)).then(() => {
-				if (!event.shiftKey) map.pasting = false;
+			const keepPasting = event.shiftKey;
+			void edit((id) => MapService.Paste(id, tile)).then((change) => {
+				if (change && !keepPasting) map.pasting = false;
 			});
 			return;
 		}
@@ -494,14 +515,15 @@
 			);
 		} else if (ended.kind === "box") {
 			if (ended.started) {
+				const { floors, compensate } = resolveSelectionArgs(map.selection);
 				void edit((id) =>
 					MapService.SelectRect(
 						id,
 						{ from: ended.start, to: ended.cur },
-						selectionFloors(),
+						floors,
 						ended.add,
 						ended.remove,
-						true,
+						compensate,
 					),
 				);
 			} else {
@@ -511,10 +533,6 @@
 			if (ended.dx || ended.dy) void edit((id) => MapService.MoveSelection(id, ended.dx, ended.dy, 0));
 		}
 		requestDraw();
-	}
-
-	function selectionFloors(): string {
-		return map.view.lowerFloors && modifiers.alt ? "lower" : "current";
 	}
 
 	function onwheel(event: WheelEvent) {
@@ -883,7 +901,11 @@
 	{#if map.pick}
 		<div class="pickhint">{map.pick.label} · Esc cancels</div>
 	{:else if map.pasting}
-		<div class="pickhint">Click to paste · Shift+click pastes again · Esc cancels</div>
+		<div class="pickhint">
+			Click to paste{clip?.tiles?.length
+				? ` (${clip.tiles.length.toLocaleString()} tile${clip.tiles.length === 1 ? "" : "s"}${clip.minDz !== clip.maxDz ? ` · Z ${map.floor + clip.minDz}–${map.floor + clip.maxDz}` : ""})`
+				: ""} · Shift+click pastes again · Esc cancels
+		</div>
 	{/if}
 	{#if map.active?.tiles === 0 && !map.pick && !map.pasting && !glError}
 		<div class="emptyhint t-label">

@@ -10,6 +10,8 @@ import {
 	map,
 	namedBrush,
 	selectBrush,
+	setSelectionMode,
+	toggleCompensateSelection,
 	toggleFavoriteBrush,
 	useCreature,
 	warningCount,
@@ -122,6 +124,90 @@ export function mapMenus(): { label: string; items: MenuEntry[] }[] {
 					checked: () => !!map.settings?.automagic,
 					action: mapCommands.toggleAutomagic,
 				},
+			],
+		},
+		{
+			label: "Selection",
+			items: [
+				{
+					label: "Selection Mode",
+					children: [
+						{
+							label: "Compensate Selection",
+							checked: () => map.selection.compensate,
+							action: toggleCompensateSelection,
+						},
+						"-",
+						{
+							label: "Current Floor",
+							radio: true,
+							checked: () => map.selection.mode === "current",
+							action: () => setSelectionMode("current"),
+						},
+						{
+							label: "Lower Floors",
+							radio: true,
+							checked: () => map.selection.mode === "lower",
+							action: () => setSelectionMode("lower"),
+						},
+						{
+							label: "Visible Floors",
+							radio: true,
+							checked: () => map.selection.mode === "visible",
+							action: () => setSelectionMode("visible"),
+						},
+					],
+				},
+				"-",
+				{
+					label: "Select everything on this floor",
+					keys: keyLabel("selectAll"),
+					action: mapCommands.selectAll,
+					disabled: noMap,
+				},
+				{ label: "Deselect", keys: "Esc", action: mapCommands.clearSelection, disabled: noSelection },
+				"-",
+				{
+					label: "Borderize Selection",
+					keys: keyLabel("borderize"),
+					action: () => mapCommands.tool("borderizeSelection"),
+					disabled: noSelection,
+				},
+				{
+					label: "Randomize Selection",
+					action: () => mapCommands.tool("randomizeSelection"),
+					disabled: noSelection,
+				},
+				"-",
+				{
+					label: "Find in Selection…",
+					action: () => mapCommands.find({ inSelection: true }),
+					disabled: noSelection,
+				},
+				{
+					label: "Replace Items in Selection…",
+					action: () => mapCommands.find({ inSelection: true, replace: true }),
+					disabled: noSelection,
+				},
+				{
+					label: "Quick Replace Items in Selection…",
+					action: () => {
+						map.quickReplaceAnchorItem = 0;
+						map.dialog = "quickReplace";
+					},
+					disabled: noSelection,
+				},
+				"-",
+				{
+					label: "Learn Border from Selection…",
+					action: () => {
+						map.learnBorderMode = "selection";
+						map.dialog = "learnBorder";
+					},
+					disabled: noSelection,
+				},
+				{ label: "Save Terrain as Brush…", action: mapCommands.saveTerrainAsBrush, disabled: noSelection },
+				{ label: "Save Terrain as .otbm…", action: mapCommands.exportSelectionOTBM, disabled: noSelection },
 			],
 		},
 		{

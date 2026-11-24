@@ -7,16 +7,24 @@
 
 	const selectedCount = $derived(map.active?.selection ?? 0);
 	const activeMap = $derived(map.active);
+	const floorSpan = $derived(
+		activeMap && selectedCount && activeMap.selMin.z !== activeMap.selMax.z
+			? `Z ${activeMap.selMin.z}–${activeMap.selMax.z}`
+			: "",
+	);
 	const size = $derived(
 		activeMap && selectedCount
-			? `${activeMap.selMax.x - activeMap.selMin.x + 1}×${activeMap.selMax.y - activeMap.selMin.y + 1}${activeMap.selMin.z !== activeMap.selMax.z ? ` · floors ${activeMap.selMin.z}-${activeMap.selMax.z}` : ""}`
+			? `${activeMap.selMax.x - activeMap.selMin.x + 1}×${activeMap.selMax.y - activeMap.selMin.y + 1}${floorSpan ? ` · floors ${activeMap.selMin.z}-${activeMap.selMax.z}` : ""}`
 			: "",
 	);
 </script>
 
 {#if selectedCount && !map.pasting && !map.pick}
 	<div class="bar" role="toolbar" aria-label="Selection">
-		<span class="count" title={size}>{plural(selectedCount, "tile")}</span>
+		<span class="count" title={size}
+			>{plural(selectedCount, "tile")}{#if floorSpan}
+				· {floorSpan}{/if}</span
+		>
 		<span class="sep"></span>
 		<button title="Copy (Ctrl+C)" onclick={mapCommands.copy}><Icon name="copy" /></button>
 		<button title="Cut (Ctrl+X)" onclick={mapCommands.cut}><Icon name="replace" /></button>

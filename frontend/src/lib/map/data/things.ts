@@ -317,8 +317,13 @@ export class ThingDrawer {
 	drawGhosts(scene: Scene, camera: Camera, drawItem: DrawItem, drawCreature: DrawCreature): void {
 		const stackRank = (itemId: number) =>
 			scene.items.is(itemId, "ground") ? 0 : (STACK_RANK_BY_TOP_ORDER[scene.items.top[itemId]] ?? 3);
-		for (const ghost of scene.ghosts) {
-			if (ghost.z !== scene.floor) continue;
+		const ghosts = scene.ghostAllFloors
+			? scene.ghosts
+					.filter((ghost) => ghost.z >= 0 && ghost.z <= 15)
+					.sort((a, b) => b.z - a.z || a.y - b.y || a.x - b.x)
+			: scene.ghosts;
+		for (const ghost of ghosts) {
+			if (!scene.ghostAllFloors && ghost.z !== scene.floor) continue;
 			const screenX = camera.tileX(ghost.x, ghost.z);
 			const screenY = camera.tileY(ghost.y, ghost.z);
 			let elevation = 0;
