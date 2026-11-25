@@ -2,7 +2,9 @@ package mapedit
 
 import (
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/nekiro/ots-creator/internal/mapping/otmap"
 )
@@ -120,13 +122,22 @@ func TestSelectRectFloorModesChooseFloors(t *testing.T) {
 		floors []int
 	}{
 		{"current floor only", FloorsCurrent, 7, []int{7}},
+		{"current floor at top boundary", FloorsCurrent, 0, []int{0}},
+		{"current floor at bottom boundary", FloorsCurrent, 15, []int{15}},
 		{"unknown mode is the current floor", "all", 7, []int{7}},
 		{"lower above ground reaches down to the ground floor", FloorsLower, 5, []int{5, 6, 7}},
+		{"lower from top floor reaches ground floor", FloorsLower, 0, []int{0, 1, 2, 3, 4, 5, 6, 7}},
 		{"lower on the ground floor is the ground floor", FloorsLower, 7, []int{7}},
 		{"lower underground reaches two floors down", FloorsLower, 10, []int{10, 11, 12}},
 		{"lower near the bottom stops at the last floor", FloorsLower, 14, []int{14, 15}},
+		{"lower at the last floor stays on floor 15", FloorsLower, 15, []int{15}},
 		{"visible above ground is every floor to the ground floor", FloorsVisible, 5, []int{0, 1, 2, 3, 4, 5, 6, 7}},
+		{"visible from ground floor selects all surface floors 0..7", FloorsVisible, 7, []int{0, 1, 2, 3, 4, 5, 6, 7}},
+		{"visible from floor 0 selects all surface floors 0..7", FloorsVisible, 0, []int{0, 1, 2, 3, 4, 5, 6, 7}},
+		{"visible underground starts at floor 8", FloorsVisible, 8, []int{8, 9, 10}},
 		{"visible underground reaches two floors down", FloorsVisible, 9, []int{9, 10, 11}},
+		{"visible near the bottom stops at floor 15", FloorsVisible, 14, []int{14, 15}},
+		{"visible at floor 15 stays on floor 15", FloorsVisible, 15, []int{15}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -149,23 +160,75 @@ func TestSelectRectFloorModesChooseFloors(t *testing.T) {
 func TestSelectRectCompensateShiftsLowerFloors(t *testing.T) {
 	cases := []struct {
 		name       string
+		startFloor int
+		mode       string
+		floors     []int
 		compensate bool
 		want       []otmap.Position
 	}{
-		{"compensated", true, []otmap.Position{posAt(50, 50, 8), posAt(51, 51, 9), posAt(52, 52, 10)}},
-		{"not compensated", false, []otmap.Position{posAt(50, 50, 8), posAt(50, 50, 9), posAt(50, 50, 10)}},
+		{
+			name:       "underground compensated aligns with renderer perspective",
+			startFloor: 8,
+			mode:       FloorsLower,
+			floors:     []int{8, 9, 10},
+			compensate: true,
+			want:       []otmap.Position{posAt(50, 50, 8), posAt(49, 49, 9), posAt(48, 48, 10)},
+		},
+		{
+			name:       "underground not compensated keeps identical XY",
+			startFloor: 8,
+			mode:       FloorsLower,
+			floors:     []int{8, 9, 10},
+			compensate: false,
+			want:       []otmap.Position{posAt(50, 50, 8), posAt(50, 50, 9), posAt(50, 50, 10)},
+		},
+		{
+			name:       "above ground lower compensated aligns lower floors up-left",
+			startFloor: 5,
+			mode:       FloorsLower,
+			floors:     []int{5, 6, 7},
+			compensate: true,
+			want:       []otmap.Position{posAt(50, 50, 5), posAt(49, 49, 6), posAt(48, 48, 7)},
+		},
+		{
+			name:       "above ground lower not compensated keeps identical XY",
+			startFloor: 5,
+			mode:       FloorsLower,
+			floors:     []int{5, 6, 7},
+			compensate: false,
+			want:       []otmap.Position{posAt(50, 50, 5), posAt(50, 50, 6), posAt(50, 50, 7)},
+		},
+		{
+			name:       "ground floor visible compensated aligns upper floors down-right",
+			startFloor: 7,
+			mode:       FloorsVisible,
+			floors:     []int{5, 6, 7},
+			compensate: true,
+			want:       []otmap.Position{posAt(52, 52, 5), posAt(51, 51, 6), posAt(50, 50, 7)},
+		},
+		{
+			name:       "ground floor visible not compensated keeps identical XY",
+			startFloor: 7,
+			mode:       FloorsVisible,
+			floors:     []int{5, 6, 7},
+			compensate: false,
+			want:       []otmap.Position{posAt(50, 50, 5), posAt(50, 50, 6), posAt(50, 50, 7)},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			e := testEditor(t)
-			for z := 8; z <= 10; z++ {
-				e.Map.SetTile(posAt(50, 50, z), &otmap.Tile{Ground: otmap.Item{ID: sandID}})
-				shift := z - 8
-				e.Map.SetTile(posAt(50+shift, 50+shift, z), &otmap.Tile{Ground: otmap.Item{ID: sandID}})
+			for _, z := range tc.floors {
+				// Populate a 7x7 patch around (50,50) on each tested floor so we prove exact selection.
+				for dy := -3; dy <= 3; dy++ {
+					for dx := -3; dx <= 3; dx++ {
+						e.Map.SetTile(posAt(50+dx, 50+dy, z), &otmap.Tile{Ground: otmap.Item{ID: sandID}})
+					}
+				}
 			}
-			e.SelectRect(Rect{From: posAt(50, 50, 8), To: posAt(50, 50, 8)}, FloorsLower, false, false, tc.compensate)
+			e.SelectRect(Rect{From: posAt(50, 50, tc.startFloor), To: posAt(50, 50, tc.startFloor)}, tc.mode, false, false, tc.compensate)
 			if got := e.Selected(); !slices.Equal(got, tc.want) {
-				t.Fatalf("Selected() = %v, want %v (compensate shifts one tile right and down per floor)", got, tc.want)
+				t.Fatalf("Selected() = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -700,17 +763,68 @@ func TestPasteAcrossFloorsKeepsFloorOffsets(t *testing.T) {
 	}
 }
 
-func TestPasteSkipsTilesOutsideTheMap(t *testing.T) {
-	e := testEditor(t)
-	clip := &Clip{Width: 1, Height: 1, Tiles: []ClipTile{
-		{Ground: &otmap.Item{ID: sandID}},
-		{DZ: 1, Ground: &otmap.Item{ID: grassA}},
-	}}
-	if err := e.Paste(clip, posAt(10, 10, otmap.MaxFloor)); err != nil {
-		t.Fatal(err)
+func TestPasteRejectsTilesOutsideTheMapWithoutPartialChanges(t *testing.T) {
+	cases := []struct {
+		name string
+		clip *Clip
+		at   otmap.Position
+		want string
+	}{
+		{
+			name: "below max floor 15",
+			clip: &Clip{Width: 1, Height: 1, Tiles: []ClipTile{
+				{Ground: &otmap.Item{ID: sandID}},
+				{DZ: 1, Ground: &otmap.Item{ID: grassA}},
+			}},
+			at:   posAt(10, 10, otmap.MaxFloor),
+			want: "outside valid floors 0..15",
+		},
+		{
+			name: "above floor 0 from negative DZ",
+			clip: &Clip{Width: 1, Height: 1, Tiles: []ClipTile{
+				{DZ: -7, Ground: &otmap.Item{ID: sandID}},
+				{DZ: 0, Ground: &otmap.Item{ID: grassA}},
+			}},
+			at:   posAt(10, 10, 6),
+			want: "outside valid floors 0..15",
+		},
+		{
+			name: "past max X 65535",
+			clip: &Clip{Width: 2, Height: 1, Tiles: []ClipTile{
+				{DX: 0, Ground: &otmap.Item{ID: sandID}},
+				{DX: 1, Ground: &otmap.Item{ID: grassA}},
+			}},
+			at:   posAt(0xFFFF, 10, 7),
+			want: "outside valid map coordinates",
+		},
+		{
+			name: "negative X from negative DX",
+			clip: &Clip{Width: 1, Height: 1, Tiles: []ClipTile{
+				{DX: -1, Ground: &otmap.Item{ID: sandID}},
+			}},
+			at:   posAt(0, 10, 7),
+			want: "outside valid map coordinates",
+		},
 	}
-	if got, want := e.Selected(), points(posAt(10, 10, otmap.MaxFloor)); !slices.Equal(got, want) {
-		t.Fatalf("Selected() = %v, want only the tile on the last floor %v", got, want)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := testEditor(t)
+			e.Map.SetTile(at(5, 5), &otmap.Tile{Ground: otmap.Item{ID: sandID}})
+			e.SelectTiles(points(at(5, 5)), false)
+			err := e.Paste(tc.clip, tc.at)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Paste error = %v, want substring %q", err, tc.want)
+			}
+			if e.Map.TileCount() != 1 {
+				t.Fatalf("TileCount() = %d, want 1 (no partial paste allowed)", e.Map.TileCount())
+			}
+			if e.CanUndo() {
+				t.Fatal("failed out-of-bounds paste added an undo step")
+			}
+			if got := e.Selected(); !slices.Equal(got, points(at(5, 5))) {
+				t.Fatalf("selection changed on failed paste: %v", got)
+			}
+		})
 	}
 }
 
@@ -1112,5 +1226,284 @@ func TestRandomizeSelectionRerollsGroundsOfRandomBrushes(t *testing.T) {
 	}
 	if undo, _ := e.History(); undo[len(undo)-1].Label != "Randomize selection" {
 		t.Fatalf("last undo step %q, want \"Randomize selection\"", undo[len(undo)-1].Label)
+	}
+}
+
+func TestCopyAtFloorPreservesMultiFloorVerticalAnchor(t *testing.T) {
+	t.Run("floors 0..7 copied from reference floor 7 paste at 0..7 not 7..14", func(t *testing.T) {
+		src := testEditor(t)
+		for z := 0; z <= 7; z++ {
+			src.Map.SetTile(posAt(100, 100, z), &otmap.Tile{
+				Ground: otmap.Item{ID: sandID},
+				Items:  []otmap.Item{{ID: coinID, Subtype: uint16(z + 1)}},
+			})
+		}
+		src.SelectRect(Rect{From: posAt(100, 100, 7), To: posAt(100, 100, 7)}, FloorsVisible, false, false, false)
+		clip := src.CopyAt(7)
+		if clip == nil || len(clip.Tiles) != 8 {
+			t.Fatalf("clip = %+v, want 8 floors", clip)
+		}
+		if clip.OriginZ != 7 || clip.MinDZ != -7 || clip.MaxDZ != 0 {
+			t.Fatalf("clip Z metadata = origin %d minDz %d maxDz %d, want 7, -7, 0", clip.OriginZ, clip.MinDZ, clip.MaxDZ)
+		}
+
+		dst := testEditor(t)
+		if err := dst.Paste(clip, posAt(200, 200, 7)); err != nil {
+			t.Fatalf("Paste at Z=7 failed: %v", err)
+		}
+		for z := 0; z <= 7; z++ {
+			tile := dst.Map.Tile(posAt(200, 200, z))
+			if tile == nil || tile.Ground.ID != sandID || len(tile.Items) != 1 || tile.Items[0].Subtype != uint16(z+1) {
+				t.Fatalf("floor %d = %+v, want sand + coin subtype %d", z, tile, z+1)
+			}
+		}
+		for z := 8; z <= otmap.MaxFloor; z++ {
+			if tile := dst.Map.Tile(posAt(200, 200, z)); tile != nil {
+				t.Fatalf("unexpected tile on underground floor %d: %+v", z, tile)
+			}
+		}
+		// Pasting at Z=6 would push Z=0 to -1: must reject cleanly without modifying dst.
+		before := dst.Map.TileCount()
+		if err := dst.Paste(clip, posAt(300, 300, 6)); err == nil {
+			t.Fatal("expected Paste at Z=6 to fail when MinDZ is -7")
+		}
+		if dst.Map.TileCount() != before {
+			t.Fatalf("TileCount changed from %d to %d on rejected paste", before, dst.Map.TileCount())
+		}
+	})
+
+	t.Run("house on floors 5,6,7 keeps vertical alignment without extra paste compensation", func(t *testing.T) {
+		src := testEditor(t)
+		for z := 5; z <= 7; z++ {
+			for y := 100; y <= 102; y++ {
+				for x := 100; x <= 102; x++ {
+					src.Map.SetTile(posAt(x, y, z), &otmap.Tile{
+						Ground: otmap.Item{ID: grassA},
+						Items:  []otmap.Item{{ID: stoneID, Subtype: uint16(z)}},
+					})
+				}
+			}
+		}
+		// Select with Compensate=false so all 3 floors have the exact 3x3 column (100..102).
+		src.SelectRect(Rect{From: posAt(100, 100, 7), To: posAt(102, 102, 7)}, FloorsVisible, false, false, false)
+		clip := src.CopyAt(7)
+		if clip == nil || len(clip.Tiles) != 27 {
+			t.Fatalf("clip tiles = %d, want 27", len(clip.Tiles))
+		}
+		dst := testEditor(t)
+		if err := dst.Paste(clip, posAt(250, 260, 7)); err != nil {
+			t.Fatalf("Paste failed: %v", err)
+		}
+		for z := 5; z <= 7; z++ {
+			for dy := 0; dy <= 2; dy++ {
+				for dx := 0; dx <= 2; dx++ {
+					tile := dst.Map.Tile(posAt(250+dx, 260+dy, z))
+					if tile == nil || tile.Ground.ID != grassA || len(tile.Items) != 1 || tile.Items[0].Subtype != uint16(z) {
+						t.Fatalf("dst (%d,%d,%d) = %+v, want grass + stone subtype %d", 250+dx, 260+dy, z, tile, z)
+					}
+				}
+			}
+		}
+	})
+}
+
+func TestPastePreservesStackedItemsAttributesAndInteriorBorders(t *testing.T) {
+	src := testEditor(t)
+	src.Settings.Automagic = false
+	dest := otmap.Position{X: 333, Y: 444, Z: 6}
+	bag := otmap.Item{
+		ID: bagID,
+		Ext: &otmap.ItemExt{
+			ActionID: 1234,
+			UniqueID: 5678,
+			Text:     "Secret note",
+			Dest:     &dest,
+			DoorID:   9,
+			Items:    []otmap.Item{{ID: coinID, Subtype: 42}},
+		},
+	}
+	highID := uint32(70000)
+	// Build a 3x3 tile block on floor 7 with hand-placed border and wall inside,
+	// plus stacked items and attributes on the center tile.
+	for y := 40; y <= 42; y++ {
+		for x := 40; x <= 42; x++ {
+			tile := &otmap.Tile{
+				Ground: otmap.Item{ID: grassA},
+				Items:  []otmap.Item{{ID: borderN}, {ID: wallV}},
+			}
+			if x == 41 && y == 41 {
+				tile.Items = append(tile.Items, otmap.Item{ID: stoneID}, bag, otmap.Item{ID: highID})
+				tile.Flags = otmap.FlagPZ | otmap.FlagNoLogout
+				tile.HouseID = 12
+				tile.Ext = &otmap.TileExt{
+					Creatures: []otmap.Creature{{Name: "Dragon", SpawnTime: 60, Direction: 2}},
+					Spawn:     &otmap.Spawn{Radius: 4},
+					SpawnNPC:  &otmap.Spawn{Radius: 2},
+				}
+			}
+			src.Map.SetTile(posAt(x, y, 7), tile)
+		}
+	}
+	src.SelectRect(Rect{From: posAt(40, 40, 7), To: posAt(42, 42, 7)}, FloorsCurrent, false, false, false)
+	clip := src.CopyAt(7)
+
+	// Paste into a map WITH Automagic enabled: interior copied borders and walls must NOT be rewritten.
+	dst := testEditor(t)
+	dst.Settings.Automagic = true
+	if err := dst.Paste(clip, posAt(200, 200, 7)); err != nil {
+		t.Fatalf("Paste failed: %v", err)
+	}
+	center := dst.Map.Tile(posAt(201, 201, 7))
+	if center == nil || center.Ground.ID != grassA {
+		t.Fatalf("center tile = %+v, want grassA ground", center)
+	}
+	wantIDs := []uint32{borderN, wallV, stoneID, bagID, highID}
+	gotIDs := make([]uint32, len(center.Items))
+	for i, it := range center.Items {
+		gotIDs[i] = it.ID
+	}
+	if !slices.Equal(gotIDs, wantIDs) {
+		t.Fatalf("center item stack = %v, want exact copied stack %v", gotIDs, wantIDs)
+	}
+	pastedBag := center.Items[3]
+	if pastedBag.Ext == nil || pastedBag.Ext.ActionID != 1234 || pastedBag.Ext.UniqueID != 5678 ||
+		pastedBag.Ext.Text != "Secret note" || pastedBag.Ext.DoorID != 9 ||
+		pastedBag.Ext.Dest == nil || *pastedBag.Ext.Dest != dest ||
+		len(pastedBag.Ext.Items) != 1 || pastedBag.Ext.Items[0].ID != coinID || pastedBag.Ext.Items[0].Subtype != 42 {
+		t.Fatalf("bag ext = %+v, attributes or container contents lost", pastedBag.Ext)
+	}
+	if center.Flags != (otmap.FlagPZ|otmap.FlagNoLogout) || center.HouseID != 12 {
+		t.Fatalf("center flags=%d house=%d, want PZ|NoLogout and house 12", center.Flags, center.HouseID)
+	}
+	if center.Ext == nil || len(center.Ext.Creatures) != 1 || center.Ext.Creatures[0].Name != "Dragon" ||
+		center.Ext.Spawn == nil || center.Ext.Spawn.Radius != 4 ||
+		center.Ext.SpawnNPC == nil || center.Ext.SpawnNPC.Radius != 2 {
+		t.Fatalf("center ext = %+v, creature/spawns lost", center.Ext)
+	}
+}
+
+func TestCutAtMultiFloorAndSingleStepUndoRedo(t *testing.T) {
+	e := testEditor(t)
+	e.Settings.Automagic = false
+	for z := 5; z <= 7; z++ {
+		e.Map.SetTile(posAt(30, 30, z), &otmap.Tile{
+			Ground:  otmap.Item{ID: sandID},
+			Items:   []otmap.Item{{ID: stoneID, Subtype: uint16(z)}},
+			HouseID: 4,
+			Flags:   otmap.FlagPZ,
+		})
+	}
+	e.SelectRect(Rect{From: posAt(30, 30, 7), To: posAt(30, 30, 7)}, FloorsVisible, false, false, false)
+	clip := e.CutAt(7)
+	if clip == nil || len(clip.Tiles) != 3 {
+		t.Fatalf("CutAt = %+v, want 3 tiles", clip)
+	}
+	for z := 5; z <= 7; z++ {
+		if tile := e.Map.Tile(posAt(30, 30, z)); tile != nil {
+			t.Fatalf("source tile on floor %d not cleared after CutAt: %+v", z, tile)
+		}
+	}
+	if err := e.Paste(clip, posAt(80, 80, 7)); err != nil {
+		t.Fatalf("Paste after CutAt failed: %v", err)
+	}
+	for z := 5; z <= 7; z++ {
+		tile := e.Map.Tile(posAt(80, 80, z))
+		if tile == nil || tile.Ground.ID != sandID || tile.HouseID != 4 || tile.Flags != otmap.FlagPZ || len(tile.Items) != 1 || tile.Items[0].Subtype != uint16(z) {
+			t.Fatalf("pasted floor %d = %+v, want intact cut tile", z, tile)
+		}
+	}
+	// Single Undo undoes the entire 3-floor paste.
+	if label := e.Undo(); label != "Paste" {
+		t.Fatalf("Undo() = %q, want Paste", label)
+	}
+	for z := 5; z <= 7; z++ {
+		if tile := e.Map.Tile(posAt(80, 80, z)); tile != nil {
+			t.Fatalf("floor %d still present after Paste undo: %+v", z, tile)
+		}
+	}
+	// Single Redo restores the entire 3-floor paste.
+	if label := e.Redo(); label != "Paste" {
+		t.Fatalf("Redo() = %q, want Paste", label)
+	}
+	for z := 5; z <= 7; z++ {
+		if tile := e.Map.Tile(posAt(80, 80, z)); tile == nil || tile.Ground.ID != sandID {
+			t.Fatalf("floor %d missing after Paste redo: %+v", z, tile)
+		}
+	}
+	// Undoing Paste then Cut restores original tiles and house/flags.
+	e.Undo()
+	if label := e.Undo(); label != "Cut" {
+		t.Fatalf("second Undo() = %q, want Cut", label)
+	}
+	for z := 5; z <= 7; z++ {
+		tile := e.Map.Tile(posAt(30, 30, z))
+		if tile == nil || tile.Ground.ID != sandID || tile.HouseID != 4 || tile.Flags != otmap.FlagPZ {
+			t.Fatalf("source floor %d not restored after Cut undo: %+v", z, tile)
+		}
+	}
+}
+
+func TestMultiFloorLargeSelectionPerformance(t *testing.T) {
+	e := testEditor(t)
+	e.Settings.Automagic = false
+	const side = 40
+	const floors = 8
+	const wantTiles = side * side * floors // 12,800 tiles across Z=0..7
+	for z := 0; z < floors; z++ {
+		for y := 100; y < 100+side; y++ {
+			for x := 100; x < 100+side; x++ {
+				e.Map.SetTile(posAt(x, y, z), &otmap.Tile{
+					Ground: otmap.Item{ID: sandID},
+					Items:  []otmap.Item{{ID: stoneID}},
+				})
+			}
+		}
+	}
+	start := time.Now()
+	e.SelectRect(Rect{From: posAt(100, 100, 7), To: posAt(100+side-1, 100+side-1, 7)}, FloorsVisible, false, false, false)
+	if e.SelectionCount() != wantTiles {
+		t.Fatalf("SelectionCount = %d, want %d", e.SelectionCount(), wantTiles)
+	}
+	clip := e.CopyAt(7)
+	if clip == nil || len(clip.Tiles) != wantTiles {
+		t.Fatalf("copied tiles = %d, want %d", len(clip.Tiles), wantTiles)
+	}
+	if err := e.Paste(clip, posAt(300, 300, 7)); err != nil {
+		t.Fatalf("Paste failed: %v", err)
+	}
+	if e.Map.TileCount() != wantTiles*2 {
+		t.Fatalf("TileCount = %d, want %d", e.Map.TileCount(), wantTiles*2)
+	}
+	e.Undo()
+	if e.Map.TileCount() != wantTiles {
+		t.Fatalf("TileCount after undo = %d, want %d", e.Map.TileCount(), wantTiles)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("large 3D select+copy+paste+undo took %v, expected < 5s", elapsed)
+	}
+}
+
+func BenchmarkMultiFloorCopyPaste(b *testing.B) {
+	e := testEditor(&testing.T{})
+	e.Settings.Automagic = false
+	const side = 25
+	for z := 4; z <= 7; z++ {
+		for y := 50; y < 50+side; y++ {
+			for x := 50; x < 50+side; x++ {
+				e.Map.SetTile(posAt(x, y, z), &otmap.Tile{
+					Ground: otmap.Item{ID: sandID},
+					Items:  []otmap.Item{{ID: stoneID}},
+				})
+			}
+		}
+	}
+	e.SelectRect(Rect{From: posAt(50, 50, 7), To: posAt(50+side-1, 50+side-1, 7)}, FloorsVisible, false, false, false)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		clip := e.CopyAt(7)
+		if err := e.Paste(clip, posAt(200, 200, 7)); err != nil {
+			b.Fatal(err)
+		}
+		e.Undo()
 	}
 }

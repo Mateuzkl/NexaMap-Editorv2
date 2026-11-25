@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { Clip, CreatureType, DoodadBuffer } from "../data/api";
 import { MAX_RECT_PREVIEW_TILES, PREVIEW_COLORS } from "../constants";
-import { computePreview, creatureGhost, lookOf, type MapDrag, type PreviewInput } from "./ghostPreview";
+import {
+	computePreview,
+	creatureGhost,
+	lookOf,
+	MAX_PASTE_PREVIEW_TILES,
+	type MapDrag,
+	type PreviewInput,
+} from "./ghostPreview";
 import type { BrushSel } from "../state.svelte";
 
 const at = (x: number, y: number, z = 7) => ({ x, y, z });
@@ -144,6 +151,63 @@ describe("computePreview", () => {
 		const { ghosts, rects } = computePreview(input({ pasting: true, clip }));
 		expect(ghosts).toEqual([{ x: 11, y: 10, z: 7, ids: [4, 5], subs: [0, 2] }]);
 		expect(rects).toEqual([{ x0: 10, y0: 10, x1: 11, y1: 10, z: 7, stroke: PREVIEW_COLORS.pasteBounds }]);
+	});
+
+	it("previews multi-floor clipboard tiles with negative DZ offsets", () => {
+		const clip = {
+			width: 1,
+			height: 1,
+			originZ: 7,
+			minDz: -2,
+			maxDz: 0,
+			tiles: [
+				{ dx: 0, dy: 0, dz: -2, ground: { id: 10, subtype: 0 } },
+				{ dx: 0, dy: 0, dz: -1, ground: { id: 11, subtype: 0 } },
+				{ dx: 0, dy: 0, dz: 0, ground: { id: 12, subtype: 0 } },
+			],
+		} as unknown as Clip;
+		const { ghosts, rects } = computePreview(input({ hover: at(20, 20, 7), floor: 7, pasting: true, clip }));
+		expect(ghosts.map((ghost) => ghost.z)).toEqual([5, 6, 7]);
+		expect(rects[0].stroke).toEqual(PREVIEW_COLORS.pasteBounds);
+	});
+
+	it("highlights out-of-bounds multi-floor paste previews in red", () => {
+		const clip = {
+			width: 1,
+			height: 1,
+			originZ: 7,
+			minDz: -7,
+			maxDz: 0,
+			tiles: [{ dx: 0, dy: 0, dz: -7, ground: { id: 10, subtype: 0 } }],
+		} as unknown as Clip;
+		const { ghosts, rects } = computePreview(input({ hover: at(20, 20, 5), floor: 5, pasting: true, clip }));
+		expect(ghosts).toEqual([]);
+		expect(rects[0].stroke).toEqual(PREVIEW_COLORS.spawn.eraseStroke);
+		expect(rects[0].fill).toEqual(PREVIEW_COLORS.erasedTile);
+	});
+
+	it("skips per-tile ghosts for huge clipboards while keeping the bounding rectangle and O(1) bounds check", () => {
+		const clip = {
+			width: 100,
+			height: 50,
+			totalTiles: MAX_PASTE_PREVIEW_TILES + 1000,
+			minDx: 0,
+			maxDx: 99,
+			minDy: 0,
+			maxDy: 49,
+			minDz: -7,
+			maxDz: 0,
+			tiles: null,
+		} as unknown as Clip;
+		const valid = computePreview(input({ hover: at(20, 20, 7), floor: 7, pasting: true, clip }));
+		expect(valid.ghosts).toEqual([]);
+		expect(valid.rects).toHaveLength(1);
+		expect(valid.rects[0].stroke).toEqual(PREVIEW_COLORS.pasteBounds);
+
+		const invalid = computePreview(input({ hover: at(20, 20, 5), floor: 5, pasting: true, clip }));
+		expect(invalid.ghosts).toEqual([]);
+		expect(invalid.rects[0].stroke).toEqual(PREVIEW_COLORS.spawn.eraseStroke);
+		expect(invalid.rects[0].fill).toEqual(PREVIEW_COLORS.erasedTile);
 	});
 
 	it("frames a selection box", () => {

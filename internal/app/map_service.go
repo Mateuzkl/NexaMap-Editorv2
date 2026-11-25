@@ -17,8 +17,8 @@ var ErrNoMap = errors.New("the map is not open")
 var errNoClient = errors.New("open a client first: the map editor draws the map with its sprites")
 
 type openMap struct {
-	id     int
-	path   string
+	id   int
+	path string
 	// editor.Items.Mode is the item id mode of the map (see map_data.go).
 	editor *mapedit.Editor
 	// suggestions counts which items go together (see map_suggest.go);
@@ -48,14 +48,16 @@ type MapService struct {
 	session *Session
 	store   *MapStore
 	// mu guards everything; requests that only read the map share it.
-	mu            sync.RWMutex
-	maps          map[int]*openMap
-	lastID        int
+	mu     sync.RWMutex
+	maps   map[int]*openMap
+	lastID int
 	// data is the item data of the open client by item id mode.
-	data          map[otitems.Mode]*mapData
-	clipboard     *mapedit.Clip
-	clipboardMode otitems.Mode
-	activeID      int
+	data            map[otitems.Mode]*mapData
+	clipboard       *mapedit.Clip
+	clipboardMode   otitems.Mode
+	clipboardMapID  int
+	clipboardClient string
+	activeID        int
 	// looks keeps the sprite looks of items for finding look-alikes.
 	looks lookCache
 	// closed is called (under the lock) when a map closes.

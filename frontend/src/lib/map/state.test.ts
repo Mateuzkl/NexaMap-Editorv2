@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { isBrushActive, map, selectBrush, setCam, warningCount } from "./state.svelte";
+import {
+	DEFAULT_SELECTION,
+	isBrushActive,
+	map,
+	parseSelectionOptions,
+	resolveSelectionArgs,
+	selectBrush,
+	setCam,
+	setSelectionMode,
+	toggleCompensateSelection,
+	warningCount,
+} from "./state.svelte";
 
 describe("warningCount", () => {
 	it("counts listed warnings and the ones summed up", () => {
@@ -33,5 +44,40 @@ describe("selectBrush", () => {
 		const before = map.recentBrushes.length;
 		selectBrush({ kind: "raw", label: "nothing" });
 		expect(map.recentBrushes).toHaveLength(before);
+	});
+});
+
+describe("selection mode preferences", () => {
+	it("defaults to current floor with compensate enabled and sanitizes invalid stored values", () => {
+		expect(parseSelectionOptions(null)).toEqual(DEFAULT_SELECTION);
+		expect(parseSelectionOptions({ mode: "bogus", compensate: "yes" })).toEqual({
+			mode: "current",
+			compensate: true,
+		});
+		expect(parseSelectionOptions({ mode: "visible", compensate: false })).toEqual({
+			mode: "visible",
+			compensate: false,
+		});
+	});
+
+	it("propagates floors and compensate to SelectRect independently of Show lower floors", () => {
+		const prevLowerFloors = map.view.lowerFloors;
+		map.selection = { ...DEFAULT_SELECTION };
+		expect(resolveSelectionArgs()).toEqual({ floors: "current", compensate: true });
+
+		setSelectionMode("visible");
+		toggleCompensateSelection();
+		expect(resolveSelectionArgs()).toEqual({ floors: "visible", compensate: false });
+
+		// Toggling view.lowerFloors must never overwrite or suppress the selection mode preference.
+		map.view.lowerFloors = false;
+		expect(resolveSelectionArgs()).toEqual({ floors: "visible", compensate: false });
+
+		setSelectionMode("lower");
+		toggleCompensateSelection();
+		expect(resolveSelectionArgs()).toEqual({ floors: "lower", compensate: true });
+
+		map.view.lowerFloors = prevLowerFloors;
+		map.selection = { ...DEFAULT_SELECTION };
 	});
 });

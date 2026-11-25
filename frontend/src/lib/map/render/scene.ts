@@ -124,6 +124,8 @@ export interface Scene {
 	house: number;
 	ghosts: GhostTile[];
 	ghostAlpha: number;
+	/** Draw ghosts on all valid floors bottom-up (multi-floor paste preview). */
+	ghostAllFloors?: boolean;
 	rects: RectMark[];
 	markers: Marker[];
 	/** Selected things drawn again at this offset (dragging a selection). */

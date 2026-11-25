@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { flattenMenuItems, type MenuEntry, type MenuItem } from "../../menu.svelte";
 import type { TileInfo, TileItem } from "../data/api";
 import { TileFlags, type TileData } from "../data/chunks";
-import { map, toggleFavoriteBrush } from "../state.svelte";
-import { mapContextMenu, tilePicks } from "./menus";
+import { DEFAULT_SELECTION, map, toggleFavoriteBrush } from "../state.svelte";
+import { mapContextMenu, mapMenus, tilePicks } from "./menus";
 
 const item = (id: number, name: string, brush = "", brushKind = "", topOrder = 0) =>
 	({ id, name, brush, brushKind, topOrder }) as TileItem;
@@ -81,7 +82,7 @@ describe("mapContextMenu", () => {
 
 		const qr = entries.find((entry) => entry !== "-" && entry.label === "Quick Replace Items…");
 		expect(qr && qr !== "-").toBe(true);
-		if (qr && qr !== "-") qr.action();
+		if (qr && qr !== "-") qr.action?.();
 		expect(map.dialog).toBe("quickReplace");
 		expect(map.quickReplaceAnchorItem).toBe(4500);
 
@@ -93,5 +94,63 @@ describe("mapContextMenu", () => {
 		expect(map.favorites).toHaveLength(1);
 		map.favorites = [];
 		map.dialog = null;
+	});
+});
+
+describe("Selection > Selection Mode menu", () => {
+	it("exposes Compensate Selection checkbox and mutually exclusive floor mode radios", () => {
+		map.selection = { ...DEFAULT_SELECTION };
+		const menus = mapMenus();
+		const selectionMenu = menus.find((menu) => menu.label === "Selection");
+		expect(selectionMenu).toBeDefined();
+
+		const modeSubmenu = selectionMenu!.items.find(
+			(entry): entry is MenuItem => entry !== "-" && entry.label === "Selection Mode",
+		);
+		expect(modeSubmenu?.children).toBeDefined();
+		const children: MenuEntry[] = modeSubmenu!.children!;
+
+		const findItem = (label: string) =>
+			children.find((entry): entry is MenuItem => entry !== "-" && entry.label === label)!;
+
+		const compensate = findItem("Compensate Selection");
+		const current = findItem("Current Floor");
+		const lower = findItem("Lower Floors");
+		const visible = findItem("Visible Floors");
+
+		expect(compensate.radio).toBeFalsy();
+		expect(compensate.checked?.()).toBe(true);
+		expect(current.radio).toBe(true);
+		expect(lower.radio).toBe(true);
+		expect(visible.radio).toBe(true);
+
+		// Default is Current Floor.
+		expect([current.checked?.(), lower.checked?.(), visible.checked?.()]).toEqual([true, false, false]);
+
+		// Switching modes is mutually exclusive and immediate.
+		visible.action?.();
+		expect(map.selection.mode).toBe("visible");
+		expect([current.checked?.(), lower.checked?.(), visible.checked?.()]).toEqual([false, false, true]);
+
+		lower.action?.();
+		expect(map.selection.mode).toBe("lower");
+		expect([current.checked?.(), lower.checked?.(), visible.checked?.()]).toEqual([false, true, false]);
+
+		// Compensate toggles independently of floor mode.
+		compensate.action?.();
+		expect(map.selection.compensate).toBe(false);
+		expect(compensate.checked?.()).toBe(false);
+		expect(map.selection.mode).toBe("lower");
+
+		// Flattening menus for Command Palette exposes Selection Mode items cleanly.
+		const flat = flattenMenuItems(menus);
+		expect(
+			flat.some((item) => item.label === "Visible Floors" && item.detail === "Selection › Selection Mode"),
+		).toBe(true);
+		expect(
+			flat.some((item) => item.label === "Compensate Selection" && item.detail === "Selection › Selection Mode"),
+		).toBe(true);
+
+		map.selection = { ...DEFAULT_SELECTION };
 	});
 });

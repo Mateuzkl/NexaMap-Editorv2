@@ -1,9 +1,11 @@
 import type { Clip, CreatureType, DoodadBuffer, Position } from "../data/api";
 import type { CreatureData } from "../data/chunks";
-import { AREA_BRUSH_KINDS, MAX_RECT_PREVIEW_TILES, PREVIEW_COLORS } from "../constants";
+import { AREA_BRUSH_KINDS, MAX_FLOOR, MAX_RECT_PREVIEW_TILES, PREVIEW_COLORS } from "../constants";
 import type { GhostTile, RectMark } from "../render/scene";
 import type { BrushSel, Tool } from "../state.svelte";
 import { brushArea, squareOutline } from "./tileGeometry";
+
+export const MAX_PASTE_PREVIEW_TILES = 4096;
 
 export type MapDrag =
 	| { kind: "pan"; x: number; y: number; camX: number; camY: number; button: number; moved: boolean }
@@ -141,20 +143,49 @@ export function computePreview(input: PreviewInput): Preview {
 	return result;
 }
 
-function pastePreview(hover: Position, clip: Clip, { ghosts, rects }: Preview): void {
+function pasteOutOfBounds(hover: Position, clip: Clip): boolean {
+	if (clip.totalTiles > 0) {
+		return (
+			hover.x + clip.minDx < 0 ||
+			hover.x + clip.maxDx > 0xffff ||
+			hover.y + clip.minDy < 0 ||
+			hover.y + clip.maxDy > 0xffff ||
+			hover.z + clip.minDz < 0 ||
+			hover.z + clip.maxDz > MAX_FLOOR
+		);
+	}
 	for (const tile of clip.tiles ?? []) {
 		if (!tile) continue;
-		const ids: number[] = [];
-		const subs: number[] = [];
-		if (tile.ground) {
-			ids.push(tile.ground.id);
-			subs.push(tile.ground.subtype);
+		const x = hover.x + tile.dx;
+		const y = hover.y + tile.dy;
+		const z = hover.z + tile.dz;
+		if (x < 0 || y < 0 || x > 0xffff || y > 0xffff || z < 0 || z > MAX_FLOOR) return true;
+	}
+	return false;
+}
+
+function pastePreview(hover: Position, clip: Clip, { ghosts, rects }: Preview): void {
+	const tiles = clip.tiles ?? [];
+	const outOfBounds = pasteOutOfBounds(hover, clip);
+	if (tiles.length > 0 && tiles.length <= MAX_PASTE_PREVIEW_TILES) {
+		for (const tile of tiles) {
+			if (!tile) continue;
+			const x = hover.x + tile.dx;
+			const y = hover.y + tile.dy;
+			const z = hover.z + tile.dz;
+			if (x < 0 || y < 0 || x > 0xffff || y > 0xffff || z < 0 || z > MAX_FLOOR) continue;
+			const ids: number[] = [];
+			const subs: number[] = [];
+			if (tile.ground) {
+				ids.push(tile.ground.id);
+				subs.push(tile.ground.subtype);
+			}
+			for (const item of tile.items ?? []) {
+				ids.push(item.id);
+				subs.push(item.subtype);
+			}
+			ghosts.push({ x, y, z, ids, subs });
 		}
-		for (const item of tile.items ?? []) {
-			ids.push(item.id);
-			subs.push(item.subtype);
-		}
-		ghosts.push({ x: hover.x + tile.dx, y: hover.y + tile.dy, z: hover.z + tile.dz, ids, subs });
 	}
 	rects.push({
 		x0: hover.x,
@@ -162,7 +193,8 @@ function pastePreview(hover: Position, clip: Clip, { ghosts, rects }: Preview): 
 		x1: hover.x + clip.width - 1,
 		y1: hover.y + clip.height - 1,
 		z: hover.z,
-		stroke: PREVIEW_COLORS.pasteBounds,
+		stroke: outOfBounds ? PREVIEW_COLORS.spawn.eraseStroke : PREVIEW_COLORS.pasteBounds,
+		...(outOfBounds ? { fill: PREVIEW_COLORS.erasedTile } : {}),
 	});
 }
 

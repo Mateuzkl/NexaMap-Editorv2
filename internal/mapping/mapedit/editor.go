@@ -157,9 +157,11 @@ type Editor struct {
 	metaDirty         bool
 	doodad            *DoodadBuffer
 	selectedPositions map[otmap.Position]struct{}
-	replace           strokeReplace
-	peekScratch       otmap.Tile
-	peekItems         [32]otmap.Item
+	// selectionFloor remembers the camera floor of the active selection (-1: unset).
+	selectionFloor int
+	replace        strokeReplace
+	peekScratch    otmap.Tile
+	peekItems      [32]otmap.Item
 	// observer sees the changes of a shared map (see shared.go); foreign is
 	// set when other editors changed the map since the last save.
 	observer func(Commit)
@@ -183,6 +185,7 @@ func New(gameMap *otmap.Map, items *otitems.DB, brushes *Brushes) *Editor {
 		rng:               rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), rngStream)),
 		dirty:             map[otmap.ChunkKey]bool{},
 		selectedPositions: map[otmap.Position]struct{}{},
+		selectionFloor:    -1,
 	}
 }
 
@@ -325,6 +328,21 @@ func (t *Tx) Label() string { return t.label }
 // one undo step (a brush stroke sent in several requests).
 func (e *Editor) Begin(label string, stroke int64) *Tx {
 	return &Tx{editor: e, label: label, stroke: stroke, before: map[otmap.Position]*otmap.Tile{}}
+}
+
+// BeginCap starts an action with pre-allocated capacity for large batch edits
+// (such as multi-floor paste) to avoid repeated map rehashing and slice growth.
+func (e *Editor) BeginCap(label string, stroke int64, capacity int) *Tx {
+	if capacity <= 0 {
+		return e.Begin(label, stroke)
+	}
+	return &Tx{
+		editor: e,
+		label:  label,
+		stroke: stroke,
+		before: make(map[otmap.Position]*otmap.Tile, capacity),
+		order:  make([]otmap.Position, 0, capacity),
+	}
 }
 
 // BeginSelection starts a change that is not recorded in the history

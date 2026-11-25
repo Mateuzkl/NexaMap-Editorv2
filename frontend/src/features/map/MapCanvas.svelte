@@ -29,7 +29,7 @@
 		SMEAR_BRUSH_KINDS,
 		WHEEL_PAN_TILES,
 	} from "../../lib/map/constants";
-	import { computePreview, type MapDrag } from "../../lib/map/editor/ghostPreview";
+	import { computePreview, MAX_PASTE_PREVIEW_TILES, type MapDrag } from "../../lib/map/editor/ghostPreview";
 	import { describeTile } from "../../lib/map/editor/hoverText";
 	import { drawLabels, loadLabelFonts } from "../../lib/map/render/labels";
 	import { markersOf } from "../../lib/map/render/markers";
@@ -37,7 +37,15 @@
 	import { bresenhamLine, screenToTile } from "../../lib/map/editor/tileGeometry";
 	import { clamp } from "../../lib/util/math";
 	import { isTyping } from "../../lib/ui/typing";
-	import { edit, map, onMapChange, setCam, useCreature, type BrushSel } from "../../lib/map/state.svelte";
+	import {
+		edit,
+		map,
+		onMapChange,
+		resolveSelectionArgs,
+		setCam,
+		useCreature,
+		type BrushSel,
+	} from "../../lib/map/state.svelte";
 	import {
 		mapContextMenu,
 		openText,
@@ -95,7 +103,7 @@
 	}
 
 	let doodad: DoodadBuffer | null = null;
-	let clip: Clip | null = null;
+	let clip = $state.raw<Clip | null>(null);
 
 	// Frames drawn in the last second. The map draws on demand, so it reads 0 when nothing changes.
 	let frameTimes: number[] = [];
@@ -177,6 +185,7 @@
 				house: map.brush?.kind === "house" || map.brush?.kind === "houseExit" ? (map.brush.house ?? 0) : 0,
 				ghosts,
 				ghostAlpha: map.pasting ? GHOST_ALPHA.paste : GHOST_ALPHA.brush,
+				ghostAllFloors: map.pasting,
 				rects,
 				markers,
 				moveOffset: drag?.kind === "move" && (drag.dx || drag.dy) ? { dx: drag.dx, dy: drag.dy, dz: 0 } : null,
@@ -255,13 +264,35 @@
 		void refreshDoodad();
 	});
 
+	let clipRequest = 0;
 	$effect(() => {
-		if (map.pasting) {
-			void MapService.Clipboard().then((clipboard) => {
-				clip = clipboard;
-				requestDraw();
-			});
-		} else clip = null;
+		const pasting = map.pasting;
+		const id = map.activeId;
+		void map.clipboardRev;
+		const request = ++clipRequest;
+		if (pasting && id !== null) {
+			void MapService.ClipboardPreview(id, MAX_PASTE_PREVIEW_TILES)
+				.then((clipboard) => {
+					if (request !== clipRequest || !map.pasting || map.activeId !== id) return;
+					if (clipboard?.tiles?.length && clipboard.minDz !== clipboard.maxDz) {
+						// Pre-sort once on fetch (bottom-up: highest Z first) so drawGhosts stays zero-alloc per frame.
+						clipboard = {
+							...clipboard,
+							tiles: [...clipboard.tiles].sort((a, b) => b.dz - a.dz || a.dy - b.dy || a.dx - b.dx),
+						};
+					}
+					clip = clipboard;
+					requestDraw();
+				})
+				.catch((err) => {
+					if (request !== clipRequest) return;
+					clip = null;
+					map.pasting = false;
+					toast(errorMessage(err), "error");
+				});
+		} else {
+			clip = null;
+		}
 	});
 
 	const modifiers = { ctrl: false, shift: false, alt: false };
@@ -342,8 +373,9 @@
 			return;
 		}
 		if (map.pasting) {
-			void edit((id) => MapService.Paste(id, tile)).then(() => {
-				if (!event.shiftKey) map.pasting = false;
+			const keepPasting = event.shiftKey;
+			void edit((id) => MapService.Paste(id, tile)).then((change) => {
+				if (change && !keepPasting) map.pasting = false;
 			});
 			return;
 		}
@@ -494,14 +526,15 @@
 			);
 		} else if (ended.kind === "box") {
 			if (ended.started) {
+				const { floors, compensate } = resolveSelectionArgs(map.selection);
 				void edit((id) =>
 					MapService.SelectRect(
 						id,
 						{ from: ended.start, to: ended.cur },
-						selectionFloors(),
+						floors,
 						ended.add,
 						ended.remove,
-						true,
+						compensate,
 					),
 				);
 			} else {
@@ -511,10 +544,6 @@
 			if (ended.dx || ended.dy) void edit((id) => MapService.MoveSelection(id, ended.dx, ended.dy, 0));
 		}
 		requestDraw();
-	}
-
-	function selectionFloors(): string {
-		return map.view.lowerFloors && modifiers.alt ? "lower" : "current";
 	}
 
 	function onwheel(event: WheelEvent) {
@@ -788,6 +817,12 @@
 			cancelAnimationFrame(raf);
 			clearTimeout(animTimer);
 			clearTimeout(variantHintTimer);
+			clipRequest++;
+			clip = null;
+			doodad = null;
+			completion = null;
+			drag = null;
+			cycle = null;
 			for (const chunkStore of stores.values()) chunkStore.dispose();
 			stores.clear();
 			for (const geoStore of geos.values()) geoStore.dispose();
@@ -883,7 +918,12 @@
 	{#if map.pick}
 		<div class="pickhint">{map.pick.label} · Esc cancels</div>
 	{:else if map.pasting}
-		<div class="pickhint">Click to paste · Shift+click pastes again · Esc cancels</div>
+		{@const pasteCount = clip?.totalTiles || clip?.tiles?.length || 0}
+		<div class="pickhint">
+			Click to paste{pasteCount
+				? ` (${pasteCount.toLocaleString()} tile${pasteCount === 1 ? "" : "s"}${clip && clip.minDz !== clip.maxDz ? ` · Z ${map.floor + clip.minDz}–${map.floor + clip.maxDz}` : ""})`
+				: ""} · Shift+click pastes again · Esc cancels
+		</div>
 	{/if}
 	{#if map.active?.tiles === 0 && !map.pick && !map.pasting && !glError}
 		<div class="emptyhint t-label">

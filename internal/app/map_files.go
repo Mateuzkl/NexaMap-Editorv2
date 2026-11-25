@@ -213,6 +213,9 @@ func (ms *MapService) CloseMap(id int) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	delete(ms.maps, id)
+	if ms.activeID == id {
+		ms.activeID = 0
+	}
 	for _, closed := range ms.closed {
 		closed(id)
 	}

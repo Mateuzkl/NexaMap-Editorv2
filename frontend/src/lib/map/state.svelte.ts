@@ -18,6 +18,12 @@ import { GROUND_FLOOR } from "./constants";
 
 export type EditorMode = "objects" | "map";
 export type Tool = "select" | "brush";
+export type SelectionMode = "current" | "lower" | "visible";
+
+export interface SelectionOptions {
+	mode: SelectionMode;
+	compensate: boolean;
+}
 
 export interface BrushSel {
 	kind: string;
@@ -77,6 +83,24 @@ const DEFAULT_CAMERA: Readonly<Camera> = { x: 0, y: 0, zoom: 1, floor: GROUND_FL
 const VIEW_KEY = "map:view";
 const BRUSH_KEY = "map:brush";
 const FAVORITES_KEY = "map:favorites";
+const SELECTION_KEY = "map:selection";
+
+export const DEFAULT_SELECTION: Readonly<SelectionOptions> = {
+	mode: "current",
+	compensate: true,
+};
+
+export function parseSelectionOptions(raw: unknown): SelectionOptions {
+	const obj = raw && typeof raw === "object" ? (raw as Partial<SelectionOptions>) : {};
+	const mode: SelectionMode =
+		obj.mode === "current" || obj.mode === "lower" || obj.mode === "visible" ? obj.mode : DEFAULT_SELECTION.mode;
+	const compensate = typeof obj.compensate === "boolean" ? obj.compensate : DEFAULT_SELECTION.compensate;
+	return { mode, compensate };
+}
+
+function loadSelection(): SelectionOptions {
+	return parseSelectionOptions(loadJson<unknown>(SELECTION_KEY, DEFAULT_SELECTION));
+}
 
 const DEFAULT_VIEW: ViewOptions = {
 	grid: false,
@@ -150,6 +174,8 @@ class MapState {
 	revealBrush = $state<{ name: string; kind: string } | null>(null);
 
 	view = $state<ViewOptions>(loadJson(VIEW_KEY, DEFAULT_VIEW));
+	selection = $state<SelectionOptions>(loadSelection());
+	clipboardRev = $state(0);
 	cams = $state<Record<number, Camera>>({});
 	hover = $state.raw<Position | null>(null);
 	/** Tile the suggestion popup suggests items for; null closed. */
@@ -200,6 +226,7 @@ export const map = new MapState();
 
 $effect.root(() => {
 	$effect(() => saveJson(VIEW_KEY, map.view));
+	$effect(() => saveJson(SELECTION_KEY, $state.snapshot(map.selection)));
 	$effect(() => saveJson(BRUSH_KEY, { size: map.size, shape: map.shape }));
 	$effect(() => saveJson(FAVORITES_KEY, $state.snapshot(map.favorites)));
 });
@@ -424,6 +451,26 @@ export function toggleFavoriteBrush(brush: BrushSel): boolean {
 	}
 	map.favorites = [brush, ...list].slice(0, 64);
 	return true;
+}
+
+export function setSelectionMode(mode: SelectionMode): void {
+	map.selection.mode = mode;
+}
+
+export function toggleCompensateSelection(): void {
+	map.selection.compensate = !map.selection.compensate;
+}
+
+/** Resolves the floor-mode and compensation arguments passed to MapService.SelectRect.
+ * Intentionally independent of map.view.lowerFloors (viewing is not selection). */
+export function resolveSelectionArgs(selection: SelectionOptions = map.selection): {
+	floors: SelectionMode;
+	compensate: boolean;
+} {
+	return {
+		floors: selection.mode,
+		compensate: selection.compensate,
+	};
 }
 
 export function creatureOutfit(name: string | undefined): number {

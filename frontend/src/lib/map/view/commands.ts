@@ -375,22 +375,46 @@ export const mapCommands = {
 		const id = map.activeId;
 		if (id === null) return;
 		try {
-			const count = await MapService.Copy(id);
-			toast(`Copied ${count} tile${count === 1 ? "" : "s"}.`);
+			const selMinZ = map.active?.selMin.z;
+			const selMaxZ = map.active?.selMax.z;
+			const count = await MapService.CopyAt(id, map.floor);
+			map.clipboardRev++;
+			const floors =
+				selMinZ !== undefined && selMaxZ !== undefined && selMinZ !== selMaxZ
+					? ` (floors ${selMinZ}–${selMaxZ})`
+					: "";
+			toast(`Copied ${count} tile${count === 1 ? "" : "s"}${floors}.`);
 		} catch (err) {
 			toast(errorMessage(err), "error");
 		}
 	},
-	cut: () => edit((id) => MapService.Cut(id)),
-	async startPaste() {
-		if (map.activeId === null) return;
-		const clip = await MapService.Clipboard();
-		if (!clip?.tiles?.length) {
-			toast("The clipboard is empty: copy a selection first.");
-			return;
+	async cut() {
+		const selMinZ = map.active?.selMin.z;
+		const selMaxZ = map.active?.selMax.z;
+		const change = await edit((id) => MapService.CutAt(id, map.floor));
+		if (change) {
+			map.clipboardRev++;
+			const floors =
+				selMinZ !== undefined && selMaxZ !== undefined && selMinZ !== selMaxZ
+					? ` (floors ${selMinZ}–${selMaxZ})`
+					: "";
+			toast(`Cut ${change.count} tile${change.count === 1 ? "" : "s"}${floors}.`);
 		}
-		map.pasting = true;
-		map.tool = "select";
+	},
+	async startPaste() {
+		const id = map.activeId;
+		if (id === null) return;
+		try {
+			const clip = await MapService.ClipboardPreview(id, 0);
+			if (!clip || !(clip.totalTiles || clip.tiles?.length)) {
+				toast("The clipboard is empty: copy a selection first.");
+				return;
+			}
+			map.pasting = true;
+			map.tool = "select";
+		} catch (err) {
+			toast(errorMessage(err), "error");
+		}
 	},
 	remove: () => edit((id) => MapService.DeleteSelection(id)),
 	selectAll: () => edit((id) => MapService.SelectAll(id, map.floor)),
