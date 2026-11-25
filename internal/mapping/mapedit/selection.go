@@ -121,17 +121,24 @@ func (e *Editor) SelectRect(area Rect, floors string, add, remove, compensate bo
 }
 
 func allSelected(tile *otmap.Tile) bool {
-	fullySelected := tile.Clone()
-	fullySelected.SetSelected(true)
-	return equalSelection(fullySelected, tile)
-}
-
-func equalSelection(left, right *otmap.Tile) bool {
-	if left.Ground.Selected != right.Ground.Selected || len(left.Items) != len(right.Items) {
+	if tile.Ground.ID != 0 && !tile.Ground.Selected {
 		return false
 	}
-	for i := range left.Items {
-		if left.Items[i].Selected != right.Items[i].Selected {
+	for i := range tile.Items {
+		if !tile.Items[i].Selected {
+			return false
+		}
+	}
+	if tile.Ext != nil {
+		for i := range tile.Ext.Creatures {
+			if !tile.Ext.Creatures[i].Selected {
+				return false
+			}
+		}
+		if tile.Ext.Spawn != nil && !tile.Ext.Spawn.Selected {
+			return false
+		}
+		if tile.Ext.SpawnNPC != nil && !tile.Ext.SpawnNPC.Selected {
 			return false
 		}
 	}
@@ -248,12 +255,36 @@ type ClipTile struct {
 }
 
 type Clip struct {
-	Tiles   []ClipTile `json:"tiles"`
-	Width   int        `json:"width"`
-	Height  int        `json:"height"`
-	OriginZ int        `json:"originZ"`
-	MinDZ   int        `json:"minDz"`
-	MaxDZ   int        `json:"maxDz"`
+	Tiles      []ClipTile `json:"tiles"`
+	TotalTiles int        `json:"totalTiles"`
+	Width      int        `json:"width"`
+	Height     int        `json:"height"`
+	OriginZ    int        `json:"originZ"`
+	MinDX      int        `json:"minDx"`
+	MaxDX      int        `json:"maxDx"`
+	MinDY      int        `json:"minDy"`
+	MaxDY      int        `json:"maxDy"`
+	MinDZ      int        `json:"minDz"`
+	MaxDZ      int        `json:"maxDz"`
+}
+
+// Preview returns a copy of Clip suitable for IPC previews. When maxTiles <= 0
+// or len(Tiles) > maxTiles, Tiles is omitted while TotalTiles and all bounding
+// offsets remain exact so huge clipboards transfer in O(1) bytes.
+func (c *Clip) Preview(maxTiles int) *Clip {
+	if c == nil {
+		return nil
+	}
+	total := c.TotalTiles
+	if total == 0 {
+		total = len(c.Tiles)
+	}
+	preview := *c
+	preview.TotalTiles = total
+	if maxTiles <= 0 || len(c.Tiles) > maxTiles {
+		preview.Tiles = nil
+	}
+	return &preview
 }
 
 func extract(tile *otmap.Tile, take bool) ClipTile {
@@ -266,20 +297,34 @@ func extract(tile *otmap.Tile, take bool) ClipTile {
 			tile.Ground = otmap.Item{}
 		}
 	}
-	kept := tile.Items[:0:0]
-	for _, item := range tile.Items {
-		if item.Selected {
-			copied := item.Clone()
-			copied.Selected = false
-			clipTile.Items = append(clipTile.Items, copied)
+	if len(tile.Items) > 0 {
+		var kept []otmap.Item
+		if take {
+			kept = tile.Items[:0]
+		}
+		for _, item := range tile.Items {
+			if item.Selected {
+				if clipTile.Items == nil {
+					clipTile.Items = make([]otmap.Item, 0, len(tile.Items))
+				}
+				copied := item.Clone()
+				copied.Selected = false
+				clipTile.Items = append(clipTile.Items, copied)
+				if take {
+					continue
+				}
+			}
 			if take {
-				continue
+				kept = append(kept, item)
 			}
 		}
-		kept = append(kept, item)
-	}
-	if take {
-		tile.Items = kept
+		if take {
+			if len(kept) == 0 {
+				tile.Items = nil
+			} else {
+				tile.Items = kept
+			}
+		}
 	}
 	if tile.Ext != nil {
 		extractExtras(tile, &clipTile, take)
@@ -292,19 +337,33 @@ func extract(tile *otmap.Tile, take bool) ClipTile {
 }
 
 func extractExtras(tile *otmap.Tile, clipTile *ClipTile, take bool) {
-	var keptCreatures []otmap.Creature
-	for _, creature := range tile.Ext.Creatures {
-		if creature.Selected {
-			creature.Selected = false
-			clipTile.Creatures = append(clipTile.Creatures, creature)
+	if len(tile.Ext.Creatures) > 0 {
+		var keptCreatures []otmap.Creature
+		if take {
+			keptCreatures = tile.Ext.Creatures[:0]
+		}
+		for _, creature := range tile.Ext.Creatures {
+			if creature.Selected {
+				if clipTile.Creatures == nil {
+					clipTile.Creatures = make([]otmap.Creature, 0, len(tile.Ext.Creatures))
+				}
+				creature.Selected = false
+				clipTile.Creatures = append(clipTile.Creatures, creature)
+				if take {
+					continue
+				}
+			}
 			if take {
-				continue
+				keptCreatures = append(keptCreatures, creature)
 			}
 		}
-		keptCreatures = append(keptCreatures, creature)
-	}
-	if take {
-		tile.Ext.Creatures = keptCreatures
+		if take {
+			if len(keptCreatures) == 0 {
+				tile.Ext.Creatures = nil
+			} else {
+				tile.Ext.Creatures = keptCreatures
+			}
+		}
 	}
 	if spawn := selectedSpawnCopy(tile.Ext.Spawn); spawn != nil {
 		clipTile.Spawn = spawn
@@ -398,15 +457,21 @@ func (e *Editor) copyWithAnchor(anchorZ int) *Clip {
 	if !ok {
 		return nil
 	}
+	selected := e.Selected()
 	clip := &Clip{
+		Tiles:   make([]ClipTile, 0, len(selected)),
 		Width:   int(highest.X-lowest.X) + 1,
 		Height:  int(highest.Y-lowest.Y) + 1,
 		OriginZ: anchorZ,
 	}
 	first := true
-	for _, pos := range e.Selected() {
-		// extract without take only reads the tile.
-		clipTile := extract(e.Map.Tile(pos), false)
+	for _, pos := range selected {
+		// peekPos unpacks into scratch with zero heap allocation; extract clones every copied field.
+		tile := e.peekPos(pos)
+		if tile == nil {
+			continue
+		}
+		clipTile := extract(tile, false)
 		if clipTile.empty() {
 			continue
 		}
@@ -414,8 +479,15 @@ func (e *Editor) copyWithAnchor(anchorZ int) *Clip {
 		clipTile.DY = int(pos.Y - lowest.Y)
 		clipTile.DZ = int(pos.Z) - anchorZ
 		if first {
-			clip.MinDZ, clip.MaxDZ, first = clipTile.DZ, clipTile.DZ, false
+			clip.MinDX, clip.MaxDX = clipTile.DX, clipTile.DX
+			clip.MinDY, clip.MaxDY = clipTile.DY, clipTile.DY
+			clip.MinDZ, clip.MaxDZ = clipTile.DZ, clipTile.DZ
+			first = false
 		} else {
+			clip.MinDX = min(clip.MinDX, clipTile.DX)
+			clip.MaxDX = max(clip.MaxDX, clipTile.DX)
+			clip.MinDY = min(clip.MinDY, clipTile.DY)
+			clip.MaxDY = max(clip.MaxDY, clipTile.DY)
 			clip.MinDZ = min(clip.MinDZ, clipTile.DZ)
 			clip.MaxDZ = max(clip.MaxDZ, clipTile.DZ)
 		}
@@ -424,6 +496,7 @@ func (e *Editor) copyWithAnchor(anchorZ int) *Clip {
 	if len(clip.Tiles) == 0 {
 		return nil
 	}
+	clip.TotalTiles = len(clip.Tiles)
 	return clip
 }
 
@@ -478,10 +551,14 @@ func (e *Editor) paste(clip *Clip, at otmap.Position, stripHouses bool) (bool, e
 	if err := validatePasteBounds(clip, at); err != nil {
 		return false, err
 	}
-	tx := e.Begin("Paste", 0)
+	tx := e.BeginCap("Paste", 0, len(clip.Tiles)+len(e.selectedPositions))
 	e.deselectAll(tx)
-	pasted := newPosSet()
-	changed := newPosSet()
+	trackAuto := e.Settings.Automagic
+	var pasted, changed *posSet
+	if trackAuto {
+		pasted = newPosSetCap(len(clip.Tiles))
+		changed = newPosSetCap(len(clip.Tiles))
+	}
 	strippedHouses := false
 	for _, clipTile := range clip.Tiles {
 		target, _ := at.Add(clipTile.DX, clipTile.DY, clipTile.DZ)
@@ -490,12 +567,16 @@ func (e *Editor) paste(clip *Clip, at otmap.Position, stripHouses bool) (bool, e
 			strippedHouses = true
 		}
 		e.put(tx.Edit(target), clipTile, true)
-		pasted.add(target)
-		if e.reshapes(clipTile) {
-			changed.add(target)
+		if trackAuto {
+			pasted.add(target)
+			if e.reshapes(clipTile) {
+				changed.add(target)
+			}
 		}
 	}
-	e.autoAroundPaste(tx, pasted, changed)
+	if trackAuto {
+		e.autoAroundPaste(tx, pasted, changed)
+	}
 	tx.Commit()
 	if len(e.selectedPositions) > 0 {
 		e.selectionFloor = int(at.Z)

@@ -29,7 +29,7 @@
 		SMEAR_BRUSH_KINDS,
 		WHEEL_PAN_TILES,
 	} from "../../lib/map/constants";
-	import { computePreview, type MapDrag } from "../../lib/map/editor/ghostPreview";
+	import { computePreview, MAX_PASTE_PREVIEW_TILES, type MapDrag } from "../../lib/map/editor/ghostPreview";
 	import { describeTile } from "../../lib/map/editor/hoverText";
 	import { drawLabels, loadLabelFonts } from "../../lib/map/render/labels";
 	import { markersOf } from "../../lib/map/render/markers";
@@ -264,24 +264,35 @@
 		void refreshDoodad();
 	});
 
+	let clipRequest = 0;
 	$effect(() => {
 		const pasting = map.pasting;
 		const id = map.activeId;
 		void map.clipboardRev;
+		const request = ++clipRequest;
 		if (pasting && id !== null) {
-			void MapService.ClipboardFor(id)
+			void MapService.ClipboardPreview(id, MAX_PASTE_PREVIEW_TILES)
 				.then((clipboard) => {
-					if (map.pasting && map.activeId === id) {
-						clip = clipboard;
-						requestDraw();
+					if (request !== clipRequest || !map.pasting || map.activeId !== id) return;
+					if (clipboard?.tiles?.length && clipboard.minDz !== clipboard.maxDz) {
+						// Pre-sort once on fetch (bottom-up: highest Z first) so drawGhosts stays zero-alloc per frame.
+						clipboard = {
+							...clipboard,
+							tiles: [...clipboard.tiles].sort((a, b) => b.dz - a.dz || a.dy - b.dy || a.dx - b.dx),
+						};
 					}
+					clip = clipboard;
+					requestDraw();
 				})
 				.catch((err) => {
+					if (request !== clipRequest) return;
 					clip = null;
 					map.pasting = false;
 					toast(errorMessage(err), "error");
 				});
-		} else clip = null;
+		} else {
+			clip = null;
+		}
 	});
 
 	const modifiers = { ctrl: false, shift: false, alt: false };
@@ -806,6 +817,12 @@
 			cancelAnimationFrame(raf);
 			clearTimeout(animTimer);
 			clearTimeout(variantHintTimer);
+			clipRequest++;
+			clip = null;
+			doodad = null;
+			completion = null;
+			drag = null;
+			cycle = null;
 			for (const chunkStore of stores.values()) chunkStore.dispose();
 			stores.clear();
 			for (const geoStore of geos.values()) geoStore.dispose();
@@ -901,9 +918,10 @@
 	{#if map.pick}
 		<div class="pickhint">{map.pick.label} · Esc cancels</div>
 	{:else if map.pasting}
+		{@const pasteCount = clip?.totalTiles || clip?.tiles?.length || 0}
 		<div class="pickhint">
-			Click to paste{clip?.tiles?.length
-				? ` (${clip.tiles.length.toLocaleString()} tile${clip.tiles.length === 1 ? "" : "s"}${clip.minDz !== clip.maxDz ? ` · Z ${map.floor + clip.minDz}–${map.floor + clip.maxDz}` : ""})`
+			Click to paste{pasteCount
+				? ` (${pasteCount.toLocaleString()} tile${pasteCount === 1 ? "" : "s"}${clip && clip.minDz !== clip.maxDz ? ` · Z ${map.floor + clip.minDz}–${map.floor + clip.maxDz}` : ""})`
 				: ""} · Shift+click pastes again · Esc cancels
 		</div>
 	{/if}

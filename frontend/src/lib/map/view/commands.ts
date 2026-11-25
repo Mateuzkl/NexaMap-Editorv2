@@ -405,8 +405,8 @@ export const mapCommands = {
 		const id = map.activeId;
 		if (id === null) return;
 		try {
-			const clip = await MapService.ClipboardFor(id);
-			if (!clip?.tiles?.length) {
+			const clip = await MapService.ClipboardPreview(id, 0);
+			if (!clip || !(clip.totalTiles || clip.tiles?.length)) {
 				toast("The clipboard is empty: copy a selection first.");
 				return;
 			}

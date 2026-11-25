@@ -59,8 +59,20 @@ func TestMapServiceMultiFloorCopyPasteBetweenMapsSaveReopen(t *testing.T) {
 		t.Fatalf("CopyAt(7) = %d, %v; want 12, nil", copied, err)
 	}
 	clip, err := ms.ClipboardFor(dstInfo.ID)
-	if err != nil || clip == nil || clip.OriginZ != 7 || clip.MinDZ != -2 || clip.MaxDZ != 0 {
+	if err != nil || clip == nil || clip.OriginZ != 7 || clip.MinDZ != -2 || clip.MaxDZ != 0 || clip.TotalTiles != 12 {
 		t.Fatalf("ClipboardFor(dst) = %+v, %v", clip, err)
+	}
+	metaOnly, err := ms.ClipboardPreview(dstInfo.ID, 0)
+	if err != nil || metaOnly == nil || metaOnly.TotalTiles != 12 || metaOnly.Tiles != nil || metaOnly.MinDZ != -2 || metaOnly.MaxDZ != 0 {
+		t.Fatalf("ClipboardPreview(dst, 0) = %+v, %v; want metadata-only preview", metaOnly, err)
+	}
+	capped, err := ms.ClipboardPreview(dstInfo.ID, 4)
+	if err != nil || capped == nil || capped.TotalTiles != 12 || capped.Tiles != nil {
+		t.Fatalf("ClipboardPreview(dst, 4) = %+v, %v; want tiles omitted above cap", capped, err)
+	}
+	fullPreview, err := ms.ClipboardPreview(dstInfo.ID, 64)
+	if err != nil || fullPreview == nil || len(fullPreview.Tiles) != 12 {
+		t.Fatalf("ClipboardPreview(dst, 64) = %+v, %v; want 12 tiles", fullPreview, err)
 	}
 
 	// Paste into destination map at Z=7: floors 5, 6, 7 must land at 5, 6, 7 and foreign house ID must be stripped.
@@ -176,5 +188,16 @@ func TestMapServiceMultiFloorCutAtAndIncompatibleMode(t *testing.T) {
 	}
 	if _, err := ms.Paste(clientMap.ID, otmap.Position{X: 40, Y: 40, Z: 7}); err == nil || !strings.Contains(err.Error(), "different item ID mode") {
 		t.Fatalf("Paste mismatch err = %v, want mode mismatch error", err)
+	}
+	// Switching to another client project releases stale clipboard memory cleanly.
+	ms.mu.Lock()
+	ms.clipboardMode = otitems.ModeClient
+	ms.clipboardClient = "other-client.dat"
+	ms.mu.Unlock()
+	if stale, err := ms.ClipboardPreview(clientMap.ID, 0); err != nil || stale != nil {
+		t.Fatalf("ClipboardPreview after client change = %+v, %v; want nil, nil", stale, err)
+	}
+	if ms.Clipboard() != nil {
+		t.Fatal("stale clipboard from another client was not released")
 	}
 }

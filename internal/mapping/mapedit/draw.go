@@ -60,6 +60,16 @@ type posSet struct {
 
 func newPosSet() *posSet { return &posSet{seen: map[otmap.Position]bool{}} }
 
+func newPosSetCap(capacity int) *posSet {
+	if capacity <= 0 {
+		return newPosSet()
+	}
+	return &posSet{
+		list: make([]otmap.Position, 0, capacity),
+		seen: make(map[otmap.Position]bool, capacity),
+	}
+}
+
 func (s *posSet) add(pos otmap.Position) {
 	if !s.seen[pos] {
 		s.seen[pos] = true

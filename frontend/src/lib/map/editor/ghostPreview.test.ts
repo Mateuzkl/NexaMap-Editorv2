@@ -186,17 +186,28 @@ describe("computePreview", () => {
 		expect(rects[0].fill).toEqual(PREVIEW_COLORS.erasedTile);
 	});
 
-	it("skips per-tile ghosts for huge clipboards while keeping the bounding rectangle", () => {
-		const tiles = Array.from({ length: MAX_PASTE_PREVIEW_TILES + 1 }, (_, i) => ({
-			dx: i % 100,
-			dy: Math.floor(i / 100),
-			dz: 0,
-			ground: { id: 4, subtype: 0 },
-		}));
-		const clip = { width: 100, height: 50, tiles } as unknown as Clip;
-		const { ghosts, rects } = computePreview(input({ pasting: true, clip }));
-		expect(ghosts).toEqual([]);
-		expect(rects).toHaveLength(1);
+	it("skips per-tile ghosts for huge clipboards while keeping the bounding rectangle and O(1) bounds check", () => {
+		const clip = {
+			width: 100,
+			height: 50,
+			totalTiles: MAX_PASTE_PREVIEW_TILES + 1000,
+			minDx: 0,
+			maxDx: 99,
+			minDy: 0,
+			maxDy: 49,
+			minDz: -7,
+			maxDz: 0,
+			tiles: null,
+		} as unknown as Clip;
+		const valid = computePreview(input({ hover: at(20, 20, 7), floor: 7, pasting: true, clip }));
+		expect(valid.ghosts).toEqual([]);
+		expect(valid.rects).toHaveLength(1);
+		expect(valid.rects[0].stroke).toEqual(PREVIEW_COLORS.pasteBounds);
+
+		const invalid = computePreview(input({ hover: at(20, 20, 5), floor: 5, pasting: true, clip }));
+		expect(invalid.ghosts).toEqual([]);
+		expect(invalid.rects[0].stroke).toEqual(PREVIEW_COLORS.spawn.eraseStroke);
+		expect(invalid.rects[0].fill).toEqual(PREVIEW_COLORS.erasedTile);
 	});
 
 	it("frames a selection box", () => {

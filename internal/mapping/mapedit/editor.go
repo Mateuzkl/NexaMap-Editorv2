@@ -330,6 +330,21 @@ func (e *Editor) Begin(label string, stroke int64) *Tx {
 	return &Tx{editor: e, label: label, stroke: stroke, before: map[otmap.Position]*otmap.Tile{}}
 }
 
+// BeginCap starts an action with pre-allocated capacity for large batch edits
+// (such as multi-floor paste) to avoid repeated map rehashing and slice growth.
+func (e *Editor) BeginCap(label string, stroke int64, capacity int) *Tx {
+	if capacity <= 0 {
+		return e.Begin(label, stroke)
+	}
+	return &Tx{
+		editor: e,
+		label:  label,
+		stroke: stroke,
+		before: make(map[otmap.Position]*otmap.Tile, capacity),
+		order:  make([]otmap.Position, 0, capacity),
+	}
+}
+
 // BeginSelection starts a change that is not recorded in the history
 // (selection only).
 func (e *Editor) BeginSelection() *Tx {

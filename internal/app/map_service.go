@@ -52,11 +52,12 @@ type MapService struct {
 	maps   map[int]*openMap
 	lastID int
 	// data is the item data of the open client by item id mode.
-	data           map[otitems.Mode]*mapData
-	clipboard      *mapedit.Clip
-	clipboardMode  otitems.Mode
-	clipboardMapID int
-	activeID       int
+	data            map[otitems.Mode]*mapData
+	clipboard       *mapedit.Clip
+	clipboardMode   otitems.Mode
+	clipboardMapID  int
+	clipboardClient string
+	activeID        int
 	// looks keeps the sprite looks of items for finding look-alikes.
 	looks lookCache
 	// closed is called (under the lock) when a map closes.

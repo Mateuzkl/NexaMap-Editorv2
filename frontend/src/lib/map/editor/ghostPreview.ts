@@ -143,20 +143,31 @@ export function computePreview(input: PreviewInput): Preview {
 	return result;
 }
 
-function pastePreview(hover: Position, clip: Clip, { ghosts, rects }: Preview): void {
-	const tiles = clip.tiles ?? [];
-	let outOfBounds = false;
-	for (const tile of tiles) {
+function pasteOutOfBounds(hover: Position, clip: Clip): boolean {
+	if (clip.totalTiles > 0) {
+		return (
+			hover.x + clip.minDx < 0 ||
+			hover.x + clip.maxDx > 0xffff ||
+			hover.y + clip.minDy < 0 ||
+			hover.y + clip.maxDy > 0xffff ||
+			hover.z + clip.minDz < 0 ||
+			hover.z + clip.maxDz > MAX_FLOOR
+		);
+	}
+	for (const tile of clip.tiles ?? []) {
 		if (!tile) continue;
 		const x = hover.x + tile.dx;
 		const y = hover.y + tile.dy;
 		const z = hover.z + tile.dz;
-		if (x < 0 || y < 0 || x > 0xffff || y > 0xffff || z < 0 || z > MAX_FLOOR) {
-			outOfBounds = true;
-			break;
-		}
+		if (x < 0 || y < 0 || x > 0xffff || y > 0xffff || z < 0 || z > MAX_FLOOR) return true;
 	}
-	if (tiles.length <= MAX_PASTE_PREVIEW_TILES) {
+	return false;
+}
+
+function pastePreview(hover: Position, clip: Clip, { ghosts, rects }: Preview): void {
+	const tiles = clip.tiles ?? [];
+	const outOfBounds = pasteOutOfBounds(hover, clip);
+	if (tiles.length > 0 && tiles.length <= MAX_PASTE_PREVIEW_TILES) {
 		for (const tile of tiles) {
 			if (!tile) continue;
 			const x = hover.x + tile.dx;

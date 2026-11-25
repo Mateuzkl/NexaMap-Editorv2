@@ -7,6 +7,11 @@
 	let openSub = $state<number | null>(null);
 	let flipLeft = $state(false);
 
+	$effect(() => {
+		void items;
+		openSub = null;
+	});
+
 	function showSub(index: number, target: HTMLElement | null) {
 		openSub = index;
 		if (target) {
